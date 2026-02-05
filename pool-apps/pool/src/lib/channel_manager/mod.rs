@@ -89,6 +89,10 @@ pub struct ChannelManagerData {
     /// Set via coinbase API, defaults to "unknown"
     /// Used to populate job_to_user mapping for all new jobs
     current_user_id: String,
+    /// Current pool_tag for pool identification in coinbase scriptSig
+    /// Set via coinbase API, defaults to config.pool_signature()
+    /// Used when creating channels to identify pool in mined blocks
+    current_pool_tag: String,
 }
 
 #[derive(Clone)]
@@ -106,7 +110,6 @@ pub struct ChannelManagerChannel {
 pub struct ChannelManager {
     pub(crate) channel_manager_data: Arc<Mutex<ChannelManagerData>>,
     channel_manager_channel: ChannelManagerChannel,
-    pool_tag_string: String,
     share_batch_size: usize,
     shares_per_minute: SharesPerMinute,
     coinbase_reward_script: CoinbaseRewardScript,
@@ -201,6 +204,7 @@ impl ChannelManager {
             last_new_prev_hash: None,
             job_to_user: HashMap::new(),
             current_user_id: "unknown".to_string(),
+            current_pool_tag: config.pool_signature().to_string(),
         }));
 
         let channel_manager_channel = ChannelManagerChannel {
@@ -215,7 +219,6 @@ impl ChannelManager {
             channel_manager_channel,
             share_batch_size: config.share_batch_size(),
             shares_per_minute: config.shares_per_minute(),
-            pool_tag_string: config.pool_signature().to_string(),
             coinbase_reward_script: config.coinbase_reward_script().clone(),
             supported_extensions: config.supported_extensions().to_vec(),
             required_extensions: config.required_extensions().to_vec(),
@@ -233,7 +236,7 @@ impl ChannelManager {
         &self,
         channel_id: ChannelId,
     ) -> Option<GroupChannel<'static, DefaultJobStore<ExtendedJob<'static>>>> {
-        let (last_future_template, last_set_new_prev_hash) =
+        let (last_future_template, last_set_new_prev_hash, pool_tag) =
             self.channel_manager_data.super_safe_lock(|data| {
                 (
                     data.last_future_template
@@ -242,13 +245,14 @@ impl ChannelManager {
                     data.last_new_prev_hash
                         .clone()
                         .expect("No new prevhash found after readiness check"),
+                    data.current_pool_tag.clone(),
                 )
             });
         let mut group_channel = match GroupChannel::new_for_pool(
             channel_id,
             DefaultJobStore::new(),
             FULL_EXTRANONCE_SIZE,
-            self.pool_tag_string.clone(),
+            pool_tag,
         ) {
             Ok(channel) => channel,
             Err(e) => {
@@ -983,7 +987,6 @@ impl RouteMessageTo<'_> {
 impl std::fmt::Debug for ChannelManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChannelManager")
-            .field("pool_tag_string", &self.pool_tag_string)
             .field("share_batch_size", &self.share_batch_size)
             .field("shares_per_minute", &self.shares_per_minute)
             .finish_non_exhaustive()
