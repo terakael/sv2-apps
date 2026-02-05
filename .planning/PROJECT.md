@@ -27,10 +27,10 @@ Sub-100ms coinbase switching enables fair time-shared mining by allowing rapid a
 - [ ] User ID tracked per job for correct share attribution
 - [ ] Job-to-user mapping handles lagging shares (submitted after coinbase switch)
 - [ ] Stale job mappings cleaned up on SetNewPrevHash (prevents memory leak)
-- [ ] Merkle path remains valid when coinbase outputs change (validate assumption)
 - [ ] Concurrent template updates from Bitcoin Core handled safely
 - [ ] Lock strategy prevents deadlock between API calls and template provider
 - [ ] Block solutions trigger webhook with is_block=true flag
+- [ ] Integration tests validate shares accepted after coinbase switch
 
 ### Out of Scope
 
@@ -58,10 +58,10 @@ Sub-100ms coinbase switching enables fair time-shared mining by allowing rapid a
 - SV2 protocol flows: job distribution, channel types, message handling
 - Rust async patterns, concurrency, ownership
 
-**Technical Unknowns to Validate:**
-1. Merkle path reuse: Does changing coinbase outputs keep merkle_path valid?
-2. Concurrency safety: How to coordinate API calls with template provider messages?
-3. Job lifecycle: When/how do jobs transition between future/past/stale states?
+**Technical Areas to Explore:**
+1. Concurrency safety: How to coordinate API calls with template provider messages?
+2. Job lifecycle: When/how do jobs transition between future/past/stale states?
+3. Merkle path mechanics: Validate in practice (theory is sound: merkle_path independent of coinbase)
 
 **Foundation for Future:**
 - Backend API will orchestrate coinbase switching via fairness algorithm

@@ -17,11 +17,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Template
 
-- [ ] **TMPL-01**: Merkle path remains valid when coinbase outputs change (validate assumption with test)
-- [ ] **TMPL-02**: Pool recreates jobs from stored last_future_template with new coinbase outputs
-- [ ] **TMPL-03**: Pool updates coinbase_outputs field in ChannelManagerData
-- [ ] **TMPL-04**: Pool distributes NewMiningJob to all standard channels
-- [ ] **TMPL-05**: All connected miners receive updated jobs within 100ms of API call
+- [ ] **TMPL-01**: Pool recreates jobs from stored last_future_template with new coinbase outputs
+- [ ] **TMPL-02**: Pool updates coinbase_outputs field in ChannelManagerData
+- [ ] **TMPL-03**: Pool distributes NewMiningJob to all standard channels
+- [ ] **TMPL-04**: All connected miners receive updated jobs within 100ms of API call
+- [ ] **TMPL-05**: Integration test validates shares accepted after coinbase switch (confirms merkle path theory)
 
 ### Webhook
 
