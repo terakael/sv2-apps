@@ -43,10 +43,17 @@ pub struct PoolConfig {
     /// HTTP API server bind address (defaults to localhost:8080 for security)
     #[serde(default = "default_api_bind_addr")]
     api_bind_addr: String,
+    /// Webhook URL for share notifications (WEBHOOK-01)
+    #[serde(default = "default_webhook_url")]
+    webhook_url: String,
 }
 
 fn default_api_bind_addr() -> String {
     "127.0.0.1:8080".to_string()  // API-05: localhost-only binding for MVP security
+}
+
+fn default_webhook_url() -> String {
+    "http://localhost:3000/webhook".to_string()  // Default webhook endpoint for development
 }
 
 impl PoolConfig {
@@ -67,6 +74,7 @@ impl PoolConfig {
         supported_extensions: Vec<u16>,
         required_extensions: Vec<u16>,
         api_bind_addr: String,
+        webhook_url: String,
     ) -> Self {
         Self {
             listen_address: pool_connection.listen_address,
@@ -84,6 +92,7 @@ impl PoolConfig {
             required_extensions,
             monitoring_address: None,
             api_bind_addr,
+            webhook_url,
         }
     }
 
@@ -178,6 +187,11 @@ impl PoolConfig {
     /// Returns the HTTP API bind address.
     pub fn api_bind_addr(&self) -> &str {
         &self.api_bind_addr
+    }
+
+    /// Returns the webhook URL for share notifications.
+    pub fn webhook_url(&self) -> &str {
+        &self.webhook_url
     }
 }
 
