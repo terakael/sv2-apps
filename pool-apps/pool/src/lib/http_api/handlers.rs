@@ -50,7 +50,7 @@ pub async fn handle_coinbase_update(
     info!("Processing coinbase update: address={}..., user_id={}", address_preview, req.user_id);
 
     // Phase 2: Call ChannelManager update (validates address - API-02)
-    match channel_manager.update_coinbase_and_broadcast(&req.address, req.user_id.clone()).await {
+    match channel_manager.update_coinbase_and_broadcast(&req.address, req.user_id.clone(), req.pool_tag.clone()).await {
         Ok(_) => {
             info!("Coinbase update successful for user_id={}", req.user_id);
             (

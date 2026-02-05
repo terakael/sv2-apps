@@ -747,6 +747,7 @@ impl ChannelManager {
         &self,
         new_address: &str,
         _user_id: String, // Stored for Phase 2 share attribution
+        pool_tag: Option<String>, // Optional pool tag for coinbase scriptSig customization
     ) -> PoolResult<(), error::ChannelManager> {
         use stratum_apps::stratum_core::{
             bitcoin::consensus::Encodable,
@@ -796,6 +797,12 @@ impl ChannelManager {
             // Store user_id for persistent attribution across template updates
             channel_manager_data.current_user_id = _user_id.clone();
             info!("SET current_user_id = {}", channel_manager_data.current_user_id);
+
+            // Update pool_tag if provided, otherwise keep current value
+            if let Some(tag) = pool_tag {
+                channel_manager_data.current_pool_tag = tag.clone();
+                info!("SET current_pool_tag = {}", channel_manager_data.current_pool_tag);
+            }
 
             // Get last_future_template for job recreation
             let last_future_template = channel_manager_data.last_future_template

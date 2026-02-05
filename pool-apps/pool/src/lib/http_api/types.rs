@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 ///
 /// - `user_id` must be <= 128 characters (API-03)
 /// - `user_id` must contain only alphanumeric characters, underscores, and hyphens (API-03)
+/// - `pool_tag` must be <= 100 characters (scriptSig space constraint)
+/// - `pool_tag` must contain only ASCII graphic characters and spaces
 /// - `address` validation occurs in handler layer using bitcoin crate
 #[derive(Debug, Clone, Deserialize)]
 pub struct CoinbaseUpdateRequest {
@@ -18,6 +20,9 @@ pub struct CoinbaseUpdateRequest {
     pub address: String,
     /// User identifier for share attribution
     pub user_id: String,
+    /// Optional pool identification string for coinbase scriptSig
+    #[serde(default)]
+    pub pool_tag: Option<String>,
 }
 
 impl CoinbaseUpdateRequest {
@@ -32,6 +37,8 @@ impl CoinbaseUpdateRequest {
     ///
     /// - user_id length must not exceed 128 characters
     /// - user_id must contain only: alphanumeric, underscore, hyphen
+    /// - pool_tag length must not exceed 100 characters (scriptSig space constraint)
+    /// - pool_tag must contain only ASCII graphic characters and spaces
     pub fn validate(&self) -> Result<(), String> {
         // Validate user_id length (API-03)
         if self.user_id.len() > 128 {
@@ -51,6 +58,24 @@ impl CoinbaseUpdateRequest {
                 "user_id contains invalid characters (only alphanumeric, underscore, and hyphen allowed)"
                     .to_string(),
             );
+        }
+
+        // Validate pool_tag if provided
+        if let Some(tag) = &self.pool_tag {
+            // Max 100 characters per PRD line 131
+            if tag.len() > 100 {
+                return Err(format!(
+                    "pool_tag exceeds maximum length of 100 characters (got {})",
+                    tag.len()
+                ));
+            }
+            // ASCII graphic + space per PRD line 588
+            if !tag.chars().all(|c| c.is_ascii_graphic() || c == ' ') {
+                return Err(
+                    "pool_tag contains invalid characters (only ASCII graphic and space allowed)"
+                        .to_string(),
+                );
+            }
         }
 
         Ok(())
