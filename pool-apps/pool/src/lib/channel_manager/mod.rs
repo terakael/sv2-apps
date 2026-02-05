@@ -753,7 +753,7 @@ impl ChannelManager {
         let mut coinbase_outputs = deserialize_outputs(current_outputs_bytes)
             .map_err(|e| {
                 error!("Failed to deserialize coinbase outputs: {}", e);
-                PoolError::log(format!("Failed to deserialize coinbase outputs: {}", e))
+                PoolError::shutdown(PoolErrorKind::CoinbaseOutput(e))
             })?;
 
         // Replace the scriptPubKey with the new address, keep same value
@@ -774,9 +774,22 @@ impl ChannelManager {
         // Phase 4: Atomic state update and job generation (short locks, never nested)
         let messages = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
             // Update coinbase outputs atomically
-            channel_manager_data.coinbase_outputs = new_encoded_outputs;
+            channel_manager_data.coinbase_outputs = new_encoded_outputs.clone();
+
+            // Get last_future_template for job recreation
+            let last_future_template = channel_manager_data.last_future_template
+                .as_ref()
+                .ok_or_else(|| PoolError::log("No template available for job recreation"))?
+                .clone();
 
             let mut messages: Vec<RouteMessageTo> = Vec::new();
+
+            // Deserialize the new coinbase outputs for job recreation
+            let coinbase_outputs_for_jobs = deserialize_outputs(new_encoded_outputs.clone())
+                .map_err(|e| {
+                    error!("Failed to deserialize new coinbase outputs for job recreation: {}", e);
+                    PoolError::shutdown(PoolErrorKind::DeserializeFailed)
+                })?;
 
             // Iterate over downstreams to generate job messages
             for (downstream_id, downstream) in channel_manager_data.downstream.iter_mut() {
@@ -790,20 +803,59 @@ impl ChannelManager {
                 let downstream_messages: Vec<RouteMessageTo<'_>> = downstream.downstream_data.super_safe_lock(|data| {
                     let mut messages: Vec<RouteMessageTo> = vec![];
 
+                    // Update group channel with new coinbase outputs
+                    // This recreates the merkle path and jobs with the new coinbase
+                    data.group_channel.on_new_template(last_future_template.clone(), coinbase_outputs_for_jobs.clone())
+                        .map_err(|e| {
+                            error!("Failed to update group channel with new coinbase: {}", e);
+                            PoolError::shutdown(e)
+                        })?;
+
+                    // Get the updated job from group channel
+                    let group_channel_job = data.group_channel.get_active_job()
+                        .ok_or_else(|| PoolError::shutdown(PoolErrorKind::JobNotFound))?;
+
                     // Check if this downstream requires standard jobs
                     let requires_standard_jobs = downstream.requires_standard_jobs.load(Ordering::SeqCst);
+                    let empty_group_channel = data.group_channel.get_channel_ids().is_empty();
 
-                    // For coinbase-only updates, we recreate jobs from existing active/future jobs
-                    // We don't call on_new_template since the template itself hasn't changed
+                    // If REQUIRES_STANDARD_JOBS is not set and group channel is not empty,
+                    // send NewExtendedMiningJob to the group channel
+                    if !requires_standard_jobs && !empty_group_channel {
+                        messages.push((*downstream_id, Mining::NewExtendedMiningJob(group_channel_job.get_job_message().clone())).into());
+                    }
 
-                    // Send NewMiningJob to each standard channel
+                    // Update standard channels
                     for (_channel_id, standard_channel) in data.standard_channels.iter_mut() {
-                        if requires_standard_jobs {
-                            // Get the active job (already has the updated coinbase from group channel)
+                        if !requires_standard_jobs {
+                            // Standard channels get jobs from group channel
+                            standard_channel.on_group_channel_job(group_channel_job.clone())
+                                .map_err(|e| {
+                                    error!("Failed to update standard channel with group job: {}", e);
+                                    PoolError::shutdown(e)
+                                })?;
+                        } else {
+                            // Update standard channel directly with new coinbase
+                            standard_channel.on_new_template(last_future_template.clone(), coinbase_outputs_for_jobs.clone())
+                                .map_err(|e| {
+                                    error!("Failed to update standard channel with new coinbase: {}", e);
+                                    PoolError::shutdown(e)
+                                })?;
+
+                            // Send NewMiningJob to standard channel
                             if let Some(standard_job) = standard_channel.get_active_job() {
                                 messages.push((*downstream_id, Mining::NewMiningJob(standard_job.get_job_message().clone())).into());
                             }
                         }
+                    }
+
+                    // Update extended channels with group channel job
+                    for (_channel_id, extended_channel) in data.extended_channels.iter_mut() {
+                        extended_channel.on_group_channel_job(group_channel_job.clone())
+                            .map_err(|e| {
+                                error!("Failed to update extended channel with group job: {}", e);
+                                PoolError::shutdown(e)
+                            })?;
                     }
 
                     Ok::<Vec<RouteMessageTo<'_>>, PoolError<error::ChannelManager>>(messages)
