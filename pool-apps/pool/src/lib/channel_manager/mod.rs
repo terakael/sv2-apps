@@ -85,6 +85,10 @@ pub struct ChannelManagerData {
     /// Consumed when handle_submit_shares validates shares
     /// Cleaned up on SetNewPrevHash to prevent memory leak (CONC-03)
     pub(crate) job_to_user: HashMap<u32, String>,
+    /// Current user_id for share attribution (persistent across template updates)
+    /// Set via coinbase API, defaults to "unknown"
+    /// Used to populate job_to_user mapping for all new jobs
+    current_user_id: String,
 }
 
 #[derive(Clone)]
@@ -196,6 +200,7 @@ impl ChannelManager {
             last_future_template: None,
             last_new_prev_hash: None,
             job_to_user: HashMap::new(),
+            current_user_id: "unknown".to_string(),
         }));
 
         let channel_manager_channel = ChannelManagerChannel {
@@ -784,6 +789,9 @@ impl ChannelManager {
             // Update coinbase outputs atomically
             channel_manager_data.coinbase_outputs = new_encoded_outputs.clone();
 
+            // Store user_id for persistent attribution across template updates
+            channel_manager_data.current_user_id = _user_id;
+
             // Get last_future_template for job recreation
             let last_future_template = channel_manager_data.last_future_template
                 .as_ref()
@@ -868,15 +876,18 @@ impl ChannelManager {
 
                     // CRITICAL: Store job-to-user mappings BEFORE broadcasting messages (WEBHOOK-06)
                     // This ensures mappings exist when shares arrive immediately after job distribution
+                    // Use current_user_id which persists across template updates
+                    let user_id = channel_manager_data.current_user_id.clone();
+
                     // Group channel job ID (used by extended channels)
                     let group_job_id = group_channel_job.get_job_id();
-                    channel_manager_data.job_to_user.insert(group_job_id, _user_id.clone());
+                    channel_manager_data.job_to_user.insert(group_job_id, user_id.clone());
 
                     // Standard channel job IDs (if any)
                     for (_channel_id, standard_channel) in data.standard_channels.iter() {
                         if let Some(standard_job) = standard_channel.get_active_job() {
                             let standard_job_id = standard_job.get_job_id();
-                            channel_manager_data.job_to_user.insert(standard_job_id, _user_id.clone());
+                            channel_manager_data.job_to_user.insert(standard_job_id, user_id.clone());
                         }
                     }
 
