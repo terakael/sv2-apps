@@ -88,35 +88,35 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| API-01 | TBD | Pending |
-| API-02 | TBD | Pending |
-| API-03 | TBD | Pending |
-| API-04 | TBD | Pending |
-| API-05 | TBD | Pending |
-| TMPL-01 | TBD | Pending |
-| TMPL-02 | TBD | Pending |
-| TMPL-03 | TBD | Pending |
-| TMPL-04 | TBD | Pending |
-| TMPL-05 | TBD | Pending |
-| WEBHOOK-01 | TBD | Pending |
-| WEBHOOK-02 | TBD | Pending |
-| WEBHOOK-03 | TBD | Pending |
-| WEBHOOK-04 | TBD | Pending |
-| WEBHOOK-05 | TBD | Pending |
-| WEBHOOK-06 | TBD | Pending |
-| WEBHOOK-07 | TBD | Pending |
-| WEBHOOK-08 | TBD | Pending |
-| WEBHOOK-09 | TBD | Pending |
-| CONC-01 | TBD | Pending |
-| CONC-02 | TBD | Pending |
-| CONC-03 | TBD | Pending |
-| CONC-04 | TBD | Pending |
+| API-01 | Phase 1 | Pending |
+| API-02 | Phase 1 | Pending |
+| API-03 | Phase 1 | Pending |
+| API-04 | Phase 1 | Pending |
+| API-05 | Phase 1 | Pending |
+| TMPL-01 | Phase 1 | Pending |
+| TMPL-02 | Phase 1 | Pending |
+| TMPL-03 | Phase 1 | Pending |
+| TMPL-04 | Phase 1 | Pending |
+| TMPL-05 | Phase 3 | Pending |
+| WEBHOOK-01 | Phase 2 | Pending |
+| WEBHOOK-02 | Phase 2 | Pending |
+| WEBHOOK-03 | Phase 2 | Pending |
+| WEBHOOK-04 | Phase 2 | Pending |
+| WEBHOOK-05 | Phase 2 | Pending |
+| WEBHOOK-06 | Phase 2 | Pending |
+| WEBHOOK-07 | Phase 2 | Pending |
+| WEBHOOK-08 | Phase 2 | Pending |
+| WEBHOOK-09 | Phase 2 | Pending |
+| CONC-01 | Phase 1 | Pending |
+| CONC-02 | Phase 1 | Pending |
+| CONC-03 | Phase 2 | Pending |
+| CONC-04 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 27 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 27 ⚠️
+- Mapped to phases: 27/27 (100%)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-05*
-*Last updated: 2026-02-05 after initial definition*
+*Last updated: 2026-02-05 after roadmap creation*
