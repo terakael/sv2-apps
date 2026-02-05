@@ -22,6 +22,7 @@ use stratum_apps::stratum_core::{
     template_distribution_sv2::SubmitSolution,
 };
 use tracing::{error, info};
+use chrono;
 
 use crate::{
     channel_manager::{ChannelManager, RouteMessageTo, CLIENT_SEARCH_SPACE_BYTES},
@@ -558,6 +559,26 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
 
                 match res {
                     Ok(ShareValidationResult::Valid(share_hash)) => {
+                        // Extract user_id from job mapping (WEBHOOK-02)
+                        let user_id = channel_manager_data.job_to_user
+                            .get(&msg.job_id)
+                            .cloned()
+                            .unwrap_or_else(|| "unknown".to_string());
+
+                        // Send webhook notification (WEBHOOK-01, WEBHOOK-03, WEBHOOK-05)
+                        let payload = crate::webhook::ShareWebhookPayload {
+                            user_id,
+                            share_hash: format!("{:x}", share_hash),  // Hex format
+                            difficulty: standard_channel.get_target().difficulty_float(),
+                            job_id: msg.job_id,
+                            channel_id: msg.channel_id,
+                            downstream_id,
+                            sequence_number: msg.sequence_number,
+                            timestamp: chrono::Utc::now().timestamp(),
+                            is_block: false,
+                        };
+                        self.webhook_client.send_share_notification(payload);
+
                         let share_accounting = standard_channel.get_share_accounting();
                         if share_accounting.should_acknowledge() {
                             let success = SubmitSharesSuccess {
@@ -579,6 +600,27 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                     }
                     Ok(ShareValidationResult::BlockFound(share_hash, template_id, coinbase)) => {
                         info!("SubmitSharesStandard: 💰 Block Found!!! 💰{share_hash}");
+
+                        // Extract user_id from job mapping
+                        let user_id = channel_manager_data.job_to_user
+                            .get(&msg.job_id)
+                            .cloned()
+                            .unwrap_or_else(|| "unknown".to_string());
+
+                        // Send webhook with is_block=true (WEBHOOK-04)
+                        let payload = crate::webhook::ShareWebhookPayload {
+                            user_id,
+                            share_hash: format!("{:x}", share_hash),
+                            difficulty: standard_channel.get_target().difficulty_float(),
+                            job_id: msg.job_id,
+                            channel_id: msg.channel_id,
+                            downstream_id,
+                            sequence_number: msg.sequence_number,
+                            timestamp: chrono::Utc::now().timestamp(),
+                            is_block: true,  // Flag block solutions
+                        };
+                        self.webhook_client.send_share_notification(payload);
+
                         // if we have a template id (i.e.: this was not a custom job)
                         // we can propagate the solution to the TP
                         if let Some(template_id) = template_id {
@@ -627,6 +669,15 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                         messages.push((downstream_id, Mining::SubmitSharesError(error)).into());
                     }
                     Err(ShareValidationError::InvalidJobId) => {
+                        // Check if this is a lagging share from previous template (WEBHOOK-07)
+                        if let Some(user_id) = channel_manager_data.job_to_user.get(&msg.job_id) {
+                            info!(
+                                "Lagging share from previous template: job_id={}, user_id={}",
+                                msg.job_id,
+                                user_id
+                            );
+                        }
+
                         error!("SubmitSharesError: downstream_id: {}, channel_id: {}, sequence_number: {}, error_code: invalid-job-id ❌", downstream_id, channel_id, msg.sequence_number);
                         let error = SubmitSharesError {
                             channel_id: msg.channel_id,
