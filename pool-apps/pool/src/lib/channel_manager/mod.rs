@@ -49,6 +49,7 @@ use crate::{
     error::{self, PoolError, PoolErrorKind, PoolResult},
     status::{handle_error, Status, StatusSender},
     utils::ShutdownMessage,
+    webhook::WebhookClient,
 };
 
 mod mining_message_handler;
@@ -109,6 +110,7 @@ pub struct ChannelManager {
     supported_extensions: Vec<u16>,
     /// Protocol extensions that the pool requires (clients must support these).
     required_extensions: Vec<u16>,
+    webhook_client: WebhookClient,
 }
 
 #[cfg_attr(not(test), hotpath::measure_all)]
@@ -160,6 +162,7 @@ impl ChannelManager {
         downstream_sender: broadcast::Sender<(DownstreamId, Mining<'static>, Option<Vec<Tlv>>)>,
         downstream_receiver: Receiver<(DownstreamId, Mining<'static>, Option<Vec<Tlv>>)>,
         coinbase_outputs: Vec<u8>,
+        webhook_client: WebhookClient,
     ) -> PoolResult<Self, error::ChannelManager> {
         let range_0 = 0..0;
         let range_1 = 0..POOL_ALLOCATION_BYTES;
@@ -211,6 +214,7 @@ impl ChannelManager {
             coinbase_reward_script: config.coinbase_reward_script().clone(),
             supported_extensions: config.supported_extensions().to_vec(),
             required_extensions: config.required_extensions().to_vec(),
+            webhook_client,
         };
 
         Ok(channel_manager)

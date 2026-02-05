@@ -80,6 +80,8 @@ impl PoolSv2 {
 
         debug!("Channels initialized.");
 
+        let webhook_client = crate::webhook::WebhookClient::new(self.config.webhook_url().to_string());
+
         let channel_manager = ChannelManager::new(
             self.config.clone(),
             channel_manager_to_tp_sender.clone(),
@@ -87,6 +89,7 @@ impl PoolSv2 {
             channel_manager_to_downstream_sender.clone(),
             downstream_to_channel_manager_receiver,
             encoded_outputs.clone(),
+            webhook_client,
         )
         .await?;
 
