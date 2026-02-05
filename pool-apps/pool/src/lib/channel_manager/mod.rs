@@ -862,6 +862,20 @@ impl ChannelManager {
                             })?;
                     }
 
+                    // CRITICAL: Store job-to-user mappings BEFORE broadcasting messages (WEBHOOK-06)
+                    // This ensures mappings exist when shares arrive immediately after job distribution
+                    // Group channel job ID (used by extended channels)
+                    let group_job_id = group_channel_job.get_job_id();
+                    channel_manager_data.job_to_user.insert(group_job_id, _user_id.clone());
+
+                    // Standard channel job IDs (if any)
+                    for (_channel_id, standard_channel) in data.standard_channels.iter() {
+                        if let Some(standard_job) = standard_channel.get_active_job() {
+                            let standard_job_id = standard_job.get_job_id();
+                            channel_manager_data.job_to_user.insert(standard_job_id, _user_id.clone());
+                        }
+                    }
+
                     Ok::<Vec<RouteMessageTo<'_>>, PoolError<error::ChannelManager>>(messages)
                 })?;
 
