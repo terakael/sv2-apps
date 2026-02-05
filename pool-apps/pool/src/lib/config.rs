@@ -66,6 +66,7 @@ impl PoolConfig {
         server_id: u16,
         supported_extensions: Vec<u16>,
         required_extensions: Vec<u16>,
+        api_bind_addr: String,
     ) -> Self {
         Self {
             listen_address: pool_connection.listen_address,
@@ -82,6 +83,7 @@ impl PoolConfig {
             supported_extensions,
             required_extensions,
             monitoring_address: None,
+            api_bind_addr,
         }
     }
 
