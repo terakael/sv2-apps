@@ -790,7 +790,8 @@ impl ChannelManager {
             channel_manager_data.coinbase_outputs = new_encoded_outputs.clone();
 
             // Store user_id for persistent attribution across template updates
-            channel_manager_data.current_user_id = _user_id;
+            channel_manager_data.current_user_id = _user_id.clone();
+            info!("SET current_user_id = {}", channel_manager_data.current_user_id);
 
             // Get last_future_template for job recreation
             let last_future_template = channel_manager_data.last_future_template
@@ -878,6 +879,7 @@ impl ChannelManager {
                     // This ensures mappings exist when shares arrive immediately after job distribution
                     // Use current_user_id which persists across template updates
                     let user_id = channel_manager_data.current_user_id.clone();
+                    info!("update_coinbase: populating job_to_user with user_id={}", user_id);
 
                     // Group channel job ID (used by extended channels)
                     let group_job_id = group_channel_job.get_job_id();

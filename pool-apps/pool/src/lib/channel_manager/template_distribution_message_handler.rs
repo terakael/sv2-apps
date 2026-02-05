@@ -128,6 +128,7 @@ impl HandleTemplateDistributionMessagesFromServerAsync for ChannelManager {
             // Populate job-to-user mappings for all new jobs created from this template
             // This ensures shares submitted for new jobs have correct user attribution
             let user_id = channel_manager_data.current_user_id.clone();
+            info!("NewTemplate: populating job_to_user with user_id={}", user_id);
             for (_downstream_id, downstream) in channel_manager_data.downstream.iter() {
                 let _ = downstream.downstream_data.super_safe_lock(|downstream_data| {
                     // Group channel job (used by extended channels)
@@ -192,6 +193,7 @@ impl HandleTemplateDistributionMessagesFromServerAsync for ChannelManager {
 
             // Repopulate with current user_id (persists across template updates)
             let user_id = data.current_user_id.clone();
+            info!("SetNewPrevHash: repopulating job_to_user with user_id={}", user_id);
 
             // Collect active job_ids from all downstreams
             for (_downstream_id, downstream) in data.downstream.iter() {

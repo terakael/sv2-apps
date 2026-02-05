@@ -1,0 +1,31 @@
+# SRI Pool config for regtest
+authority_public_key = "9auqWEzQDVyd2oe1JVGFLMLHZtCo2FFqZwtKA5gd9xbuEu7PH72"
+authority_secret_key = "mkDLTBBRxdBv998612qipDYoTK3YUrqLe8uWw7gu3iXbSrn2n"
+cert_validity_sec = 3600
+listen_address = "0.0.0.0:33333"
+
+# Regtest coinbase address - using a valid bech32 regtest address
+coinbase_reward_script = "addr(bcrt1q0s82uypdh3gw3r9mjlv86lerwxve2z2g3c37ad)"
+
+server_id = 1
+pool_signature = "Stratum V2 SRI Pool - Regtest"
+
+shares_per_minute = 6.0
+share_batch_size = 10
+
+supported_extensions = []
+required_extensions = []
+
+monitoring_address = "127.0.0.1:9090"
+
+# api_bind_addr defaults to 127.0.0.1:8080 if not specified
+# api_bind_addr = "127.0.0.1:8080"
+
+# Bitcoin Core IPC config
+# Connects directly to Bitcoin Core via IPC socket (node.sock)
+# Requires Bitcoin Core 30.0+ started with: bitcoin -m node -regtest -ipcbind=unix
+[template_provider_type.BitcoinCoreIpc]
+network = "regtest"
+# data_dir = "~/.bitcoin"  # Optional: override default data directory
+fee_threshold = 100
+min_interval = 5
