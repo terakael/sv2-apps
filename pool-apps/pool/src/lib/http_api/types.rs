@@ -1,0 +1,229 @@
+//! Request and response types for the HTTP API.
+//!
+//! This module defines the data structures used for coinbase update requests
+//! and responses, including validation logic for API-03 constraints.
+
+use serde::{Deserialize, Serialize};
+
+/// Request to update the pool's coinbase output.
+///
+/// ## Validation
+///
+/// - `user_id` must be <= 128 characters (API-03)
+/// - `user_id` must contain only alphanumeric characters, underscores, and hyphens (API-03)
+/// - `address` validation occurs in handler layer using bitcoin crate
+#[derive(Debug, Clone, Deserialize)]
+pub struct CoinbaseUpdateRequest {
+    /// Bitcoin address to receive coinbase rewards
+    pub address: String,
+    /// User identifier for share attribution
+    pub user_id: String,
+}
+
+impl CoinbaseUpdateRequest {
+    /// Validates request constraints per API-03 specification.
+    ///
+    /// ## Returns
+    ///
+    /// - `Ok(())` if validation passes
+    /// - `Err(String)` with descriptive error message if validation fails
+    ///
+    /// ## Validation Rules
+    ///
+    /// - user_id length must not exceed 128 characters
+    /// - user_id must contain only: alphanumeric, underscore, hyphen
+    pub fn validate(&self) -> Result<(), String> {
+        // Validate user_id length (API-03)
+        if self.user_id.len() > 128 {
+            return Err(format!(
+                "user_id exceeds maximum length of 128 characters (got {})",
+                self.user_id.len()
+            ));
+        }
+
+        // Validate user_id characters (API-03)
+        if !self
+            .user_id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err(
+                "user_id contains invalid characters (only alphanumeric, underscore, and hyphen allowed)"
+                    .to_string(),
+            );
+        }
+
+        Ok(())
+    }
+}
+
+/// Response from coinbase update operation.
+#[derive(Debug, Clone, Serialize)]
+pub struct CoinbaseUpdateResponse {
+    /// Whether the operation succeeded
+    pub success: bool,
+    /// Human-readable message describing the result
+    pub message: String,
+}
+
+impl CoinbaseUpdateResponse {
+    /// Creates a success response with the given message.
+    pub fn success(message: impl Into<String>) -> Self {
+        Self {
+            success: true,
+            message: message.into(),
+        }
+    }
+
+    /// Creates an error response with the given message.
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            message: message.into(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_valid_user_id_alphanumeric() {
+        let req = CoinbaseUpdateRequest {
+            address: "bcrt1qtest".to_string(),
+            user_id: "user123".to_string(),
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_valid_user_id_with_underscore() {
+        let req = CoinbaseUpdateRequest {
+            address: "bcrt1qtest".to_string(),
+            user_id: "valid_user_name".to_string(),
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_valid_user_id_with_hyphen() {
+        let req = CoinbaseUpdateRequest {
+            address: "bcrt1qtest".to_string(),
+            user_id: "valid-user-name".to_string(),
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_valid_user_id_mixed_valid_chars() {
+        let req = CoinbaseUpdateRequest {
+            address: "bcrt1qtest".to_string(),
+            user_id: "User_123-test".to_string(),
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_valid_user_id_empty() {
+        let req = CoinbaseUpdateRequest {
+            address: "bcrt1qtest".to_string(),
+            user_id: "".to_string(),
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_valid_user_id_exactly_128_chars() {
+        let req = CoinbaseUpdateRequest {
+            address: "bcrt1qtest".to_string(),
+            user_id: "a".repeat(128),
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_user_id_too_long() {
+        let req = CoinbaseUpdateRequest {
+            address: "bcrt1qtest".to_string(),
+            user_id: "a".repeat(129),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("exceeds maximum length of 128 characters"));
+    }
+
+    #[test]
+    fn test_user_id_invalid_chars_at_symbol() {
+        let req = CoinbaseUpdateRequest {
+            address: "bcrt1qtest".to_string(),
+            user_id: "invalid@user".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("invalid characters"));
+    }
+
+    #[test]
+    fn test_user_id_invalid_chars_dollar() {
+        let req = CoinbaseUpdateRequest {
+            address: "bcrt1qtest".to_string(),
+            user_id: "user$name".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("invalid characters"));
+    }
+
+    #[test]
+    fn test_user_id_invalid_chars_space() {
+        let req = CoinbaseUpdateRequest {
+            address: "bcrt1qtest".to_string(),
+            user_id: "user name".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("invalid characters"));
+    }
+
+    #[test]
+    fn test_user_id_invalid_chars_period() {
+        let req = CoinbaseUpdateRequest {
+            address: "bcrt1qtest".to_string(),
+            user_id: "user.name".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("invalid characters"));
+    }
+
+    #[test]
+    fn test_response_success_constructor() {
+        let resp = CoinbaseUpdateResponse::success("Operation completed");
+        assert!(resp.success);
+        assert_eq!(resp.message, "Operation completed");
+    }
+
+    #[test]
+    fn test_response_error_constructor() {
+        let resp = CoinbaseUpdateResponse::error("Operation failed");
+        assert!(!resp.success);
+        assert_eq!(resp.message, "Operation failed");
+    }
+
+    #[test]
+    fn test_response_success_with_string() {
+        let resp = CoinbaseUpdateResponse::success("Test".to_string());
+        assert!(resp.success);
+        assert_eq!(resp.message, "Test");
+    }
+
+    #[test]
+    fn test_response_error_with_string() {
+        let resp = CoinbaseUpdateResponse::error("Error".to_string());
+        assert!(!resp.success);
+        assert_eq!(resp.message, "Error");
+    }
+}
