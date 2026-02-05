@@ -1894,6 +1894,7 @@ name = "pool_sv2"
 version = "0.2.0"
 dependencies = [
  "async-channel",
+ "axum",
  "bitcoin_core_sv2",
  "clap",
  "config",
