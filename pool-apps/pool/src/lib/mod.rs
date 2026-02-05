@@ -128,6 +128,21 @@ impl PoolSv2 {
             });
         }
 
+        // Start HTTP API server for dynamic coinbase switching
+        let api_bind_addr = self.config.api_bind_addr();
+        if let Ok(addr) = api_bind_addr.parse() {
+            info!("Initializing HTTP API server on http://{}", api_bind_addr);
+
+            let api_channel_manager = channel_manager.clone();
+            task_manager.spawn(async move {
+                if let Err(e) = http_api::start_api_server(api_channel_manager, addr).await {
+                    error!("HTTP API server failed: {}", e);
+                }
+            });
+        } else {
+            warn!("Invalid API bind address: {}, skipping HTTP API server", api_bind_addr);
+        }
+
         let channel_manager_clone = channel_manager.clone();
         let mut bitcoin_core_sv2_join_handle: Option<JoinHandle<()>> = None;
 
