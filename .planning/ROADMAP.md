@@ -28,10 +28,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Pool recreates jobs from stored template with new coinbase outputs within 100ms
   4. All connected miners receive NewMiningJob messages with updated coinbase
   5. Lock strategy prevents deadlock between API calls and template provider updates
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 01-01: TBD during planning
+- [ ] 01-01-PLAN.md — HTTP API module structure and request/response types
+- [ ] 01-02-PLAN.md — Merkle path validity integration test (feasibility validation)
+- [ ] 01-03-PLAN.md — ChannelManager coinbase update and job broadcast implementation
+- [ ] 01-04-PLAN.md — HTTP server integration and endpoint handler
 
 ### Phase 2: Share Attribution and Webhooks
 **Goal**: Share notifications with correct user attribution for time-shared mining
@@ -69,7 +72,7 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. API Foundation and Template Switching | 0/TBD | Not started | - |
+| 1. API Foundation and Template Switching | 0/4 | Not started | - |
 | 2. Share Attribution and Webhooks | 0/TBD | Not started | - |
 | 3. Concurrency Hardening and Performance | 0/TBD | Not started | - |
 
