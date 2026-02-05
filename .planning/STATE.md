@@ -10,29 +10,29 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 2 of 3 (Share Attribution and Webhooks)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-05 — Completed 02-01-PLAN.md
+Last activity: 2026-02-05 — Completed 02-02-PLAN.md
 
-Progress: [████████░░] 80% (4/5 plans complete across phases 1-2)
+Progress: [█████████░] 83% (5/6 plans complete across phases 1-2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 9.8 min
-- Total execution time: 0.65 hours
+- Total plans completed: 5
+- Average duration: 9.2 min
+- Total execution time: 0.77 hours
 
 **By Phase:**
 
 | Phase | Plans | Total  | Avg/Plan |
 |-------|-------|--------|----------|
 | 01    | 3     | 35min  | 11.7min  |
-| 02    | 1     | 4min   | 4.0min   |
+| 02    | 2     | 9min   | 4.5min   |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (9min), 01-02 (12min est), 01-03 (14min), 02-01 (4min)
-- Trend: Phase 2 starting with fast infrastructure work
+- Last 5 plans: 01-02 (12min est), 01-03 (14min), 02-01 (4min), 02-02 (5min)
+- Trend: Phase 2 maintaining fast pace with focused infrastructure work
 
 *Updated after each plan completion*
 
@@ -57,6 +57,9 @@ Recent decisions affecting current work:
 - **02-01:** reqwest over hyper for HTTP client — higher-level API with built-in connection pooling
 - **02-01:** 5-second webhook timeout — prevents hanging on slow endpoints
 - **02-01:** Fire-and-forget webhook pattern — tokio::spawn ensures pool operations never wait for HTTP responses
+- **02-02:** Store mappings BEFORE broadcasting messages — atomic ordering prevents attribution gap
+- **02-02:** Clear all mappings on SetNewPrevHash — simple strategy, jobs become stale on blockchain advance
+- **02-02:** Track both group and standard channel job IDs — comprehensive coverage for all channel types
 
 ### Pending Todos
 
@@ -73,6 +76,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-05 11:27:23 UTC
-Stopped at: Completed 02-01-PLAN.md (Webhook infrastructure with reqwest and fire-and-forget delivery)
+Last session: 2026-02-05 20:21:43 UTC
+Stopped at: Completed 02-02-PLAN.md (Job attribution mapping with atomic population and cleanup)
 Resume file: None
