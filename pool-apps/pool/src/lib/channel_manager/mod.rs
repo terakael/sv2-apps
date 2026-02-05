@@ -79,6 +79,11 @@ pub struct ChannelManagerData {
     last_new_prev_hash: Option<SetNewPrevHash<'static>>,
     // Last future template
     last_future_template: Option<NewTemplate<'static>>,
+    /// Maps job_id → user_id for share attribution (WEBHOOK-06)
+    /// Populated when update_coinbase_and_broadcast creates jobs
+    /// Consumed when handle_submit_shares validates shares
+    /// Cleaned up on SetNewPrevHash to prevent memory leak (CONC-03)
+    pub(crate) job_to_user: HashMap<u32, String>,
 }
 
 #[derive(Clone)]
@@ -187,6 +192,7 @@ impl ChannelManager {
             coinbase_outputs,
             last_future_template: None,
             last_new_prev_hash: None,
+            job_to_user: HashMap::new(),
         }));
 
         let channel_manager_channel = ChannelManagerChannel {
