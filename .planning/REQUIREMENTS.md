@@ -97,7 +97,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TMPL-02 | Phase 1 | Pending |
 | TMPL-03 | Phase 1 | Pending |
 | TMPL-04 | Phase 1 | Pending |
-| TMPL-05 | Phase 3 | Pending |
+| TMPL-05 | Phase 1 | Pending |
 | WEBHOOK-01 | Phase 2 | Pending |
 | WEBHOOK-02 | Phase 2 | Pending |
 | WEBHOOK-03 | Phase 2 | Pending |
