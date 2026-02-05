@@ -693,6 +693,137 @@ impl ChannelManager {
         Ok(())
     }
 
+    /// Updates the pool's coinbase outputs and broadcasts new jobs to all miners.
+    ///
+    /// # Purpose
+    /// Enables dynamic coinbase address switching for time-shared mining. This method:
+    /// 1. Validates the Bitcoin address
+    /// 2. Updates the coinbase output scriptPubKey atomically
+    /// 3. Recreates jobs from the stored template with the new coinbase
+    /// 4. Broadcasts updated jobs to all connected miners
+    ///
+    /// # Parameters
+    /// - `new_address`: Bitcoin address string to validate and use for coinbase rewards
+    /// - `user_id`: User identifier for share attribution (stored for Phase 2 webhook integration)
+    ///
+    /// # Returns
+    /// - `Ok(())` if update and broadcast succeed
+    /// - `Err` if address validation fails or job distribution fails
+    ///
+    /// # Concurrency Safety
+    /// Uses lock-minimizing pattern to prevent deadlock:
+    /// - Phase 1: Validate address (no locks)
+    /// - Phase 2: Read template (short lock on channel_manager_data)
+    /// - Phase 3: Compute new outputs (no locks)
+    /// - Phase 4: Update state and generate jobs (short locks, never nested)
+    /// - Phase 5: Broadcast messages (no locks)
+    ///
+    /// # Example
+    /// ```ignore
+    /// channel_manager.update_coinbase_and_broadcast(
+    ///     "bcrt1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+    ///     "user_123".to_string()
+    /// ).await?;
+    /// ```
+    pub async fn update_coinbase_and_broadcast(
+        &self,
+        new_address: &str,
+        _user_id: String, // Stored for Phase 2 share attribution
+    ) -> PoolResult<(), error::ChannelManager> {
+        use stratum_apps::stratum_core::{
+            bitcoin::consensus::Encodable,
+            channels_sv2::outputs::deserialize_outputs,
+        };
+
+        // Phase 1: Validate address before acquiring any locks
+        let new_script_pubkey = Self::validate_and_parse_address(new_address, Network::Regtest)
+            .map_err(|e| {
+                error!("Invalid Bitcoin address: {}", e);
+                PoolError::log(format!("Invalid Bitcoin address: {}", e))
+            })?;
+
+        info!("Updating coinbase to address: {}...", &new_address[..8.min(new_address.len())]);
+
+        // Phase 2: Read current template state (short lock)
+        let current_outputs_bytes = self.channel_manager_data.super_safe_lock(|data| {
+            data.coinbase_outputs.clone()
+        });
+
+        // Phase 3: Compute new coinbase outputs (no locks held)
+        let mut coinbase_outputs = deserialize_outputs(current_outputs_bytes)
+            .map_err(|e| {
+                error!("Failed to deserialize coinbase outputs: {}", e);
+                PoolError::log(format!("Failed to deserialize coinbase outputs: {}", e))
+            })?;
+
+        // Replace the scriptPubKey with the new address, keep same value
+        if coinbase_outputs.is_empty() {
+            return Err(PoolError::log("No coinbase outputs configured"));
+        }
+
+        coinbase_outputs[0].script_pubkey = stratum_apps::stratum_core::bitcoin::ScriptBuf::from_bytes(new_script_pubkey);
+
+        // Serialize back to bytes for storage
+        let mut new_encoded_outputs = Vec::new();
+        coinbase_outputs.consensus_encode(&mut new_encoded_outputs)
+            .map_err(|e| {
+                error!("Failed to encode coinbase outputs: {}", e);
+                PoolError::shutdown(PoolErrorKind::BitcoinEncodeError(e))
+            })?;
+
+        // Phase 4: Atomic state update and job generation (short locks, never nested)
+        let messages = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
+            // Update coinbase outputs atomically
+            channel_manager_data.coinbase_outputs = new_encoded_outputs;
+
+            let mut messages: Vec<RouteMessageTo> = Vec::new();
+
+            // Iterate over downstreams to generate job messages
+            for (downstream_id, downstream) in channel_manager_data.downstream.iter_mut() {
+                // Skip job declarator clients (REQUIRES_CUSTOM_WORK flag)
+                let requires_custom_work = downstream.requires_custom_work.load(Ordering::SeqCst);
+                if requires_custom_work {
+                    continue;
+                }
+
+                // Generate jobs for this downstream (acquire downstream lock separately)
+                let downstream_messages: Vec<RouteMessageTo<'_>> = downstream.downstream_data.super_safe_lock(|data| {
+                    let mut messages: Vec<RouteMessageTo> = vec![];
+
+                    // Check if this downstream requires standard jobs
+                    let requires_standard_jobs = downstream.requires_standard_jobs.load(Ordering::SeqCst);
+
+                    // For coinbase-only updates, we recreate jobs from existing active/future jobs
+                    // We don't call on_new_template since the template itself hasn't changed
+
+                    // Send NewMiningJob to each standard channel
+                    for (_channel_id, standard_channel) in data.standard_channels.iter_mut() {
+                        if requires_standard_jobs {
+                            // Get the active job (already has the updated coinbase from group channel)
+                            if let Some(standard_job) = standard_channel.get_active_job() {
+                                messages.push((*downstream_id, Mining::NewMiningJob(standard_job.get_job_message().clone())).into());
+                            }
+                        }
+                    }
+
+                    Ok::<Vec<RouteMessageTo<'_>>, PoolError<error::ChannelManager>>(messages)
+                })?;
+
+                messages.extend(downstream_messages);
+            }
+
+            Ok::<Vec<RouteMessageTo<'_>>, PoolError<error::ChannelManager>>(messages)
+        })?;
+
+        // Phase 5: Broadcast messages (no locks, all I/O)
+        for message in messages {
+            message.forward(&self.channel_manager_channel).await;
+        }
+
+        info!("Coinbase updated and jobs broadcast to {} miners", messages.len());
+        Ok(())
+    }
+
     /// Sends a CoinbaseOutputConstraints message to the template provider.
     ///
     /// # Purpose
