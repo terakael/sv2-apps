@@ -40,6 +40,13 @@ pub struct PoolConfig {
     required_extensions: Vec<u16>,
     #[serde(default)]
     monitoring_address: Option<SocketAddr>,
+    /// HTTP API server bind address (defaults to localhost:8080 for security)
+    #[serde(default = "default_api_bind_addr")]
+    api_bind_addr: String,
+}
+
+fn default_api_bind_addr() -> String {
+    "127.0.0.1:8080".to_string()  // API-05: localhost-only binding for MVP security
 }
 
 impl PoolConfig {
@@ -164,6 +171,11 @@ impl PoolConfig {
     /// Returns the monitoring address (optional).
     pub fn monitoring_address(&self) -> Option<SocketAddr> {
         self.monitoring_address
+    }
+
+    /// Returns the HTTP API bind address.
+    pub fn api_bind_addr(&self) -> &str {
+        &self.api_bind_addr
     }
 }
 
