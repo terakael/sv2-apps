@@ -162,6 +162,21 @@ impl HandleTemplateDistributionMessagesFromServerAsync for ChannelManager {
     ) -> Result<(), Self::Error> {
         info!("Received: {}", msg);
 
+        // CONC-03: Clean up stale job mappings to prevent memory leak
+        self.channel_manager_data.super_safe_lock(|data| {
+            let jobs_before = data.job_to_user.len();
+
+            // Strategy: Clear all mappings on new prevhash
+            // Jobs become stale when blockchain advances
+            // Next coinbase update will repopulate for new template
+            data.job_to_user.clear();
+
+            info!(
+                "Cleaned up {} stale job mappings on SetNewPrevHash",
+                jobs_before
+            );
+        });
+
         let messages = self.channel_manager_data.super_safe_lock(|data| {
             data.last_new_prev_hash = Some(msg.clone().into_static());
 
