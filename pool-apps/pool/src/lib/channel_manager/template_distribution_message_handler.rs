@@ -124,6 +124,28 @@ impl HandleTemplateDistributionMessagesFromServerAsync for ChannelManager {
 
                 messages.extend(messages_);
             }
+
+            // Populate job-to-user mappings for all new jobs created from this template
+            // This ensures shares submitted for new jobs have correct user attribution
+            let user_id = channel_manager_data.current_user_id.clone();
+            for (_downstream_id, downstream) in channel_manager_data.downstream.iter() {
+                let _ = downstream.downstream_data.super_safe_lock(|downstream_data| {
+                    // Group channel job (used by extended channels)
+                    if let Some(group_job) = downstream_data.group_channel.get_active_job() {
+                        let job_id = group_job.get_job_id();
+                        channel_manager_data.job_to_user.insert(job_id, user_id.clone());
+                    }
+
+                    // Standard channel jobs
+                    for (_channel_id, standard_channel) in downstream_data.standard_channels.iter() {
+                        if let Some(standard_job) = standard_channel.get_active_job() {
+                            let job_id = standard_job.get_job_id();
+                            channel_manager_data.job_to_user.insert(job_id, user_id.clone());
+                        }
+                    }
+                });
+            }
+
             Ok::<Vec<RouteMessageTo<'_>>, Self::Error>(messages)
         })?;
 
