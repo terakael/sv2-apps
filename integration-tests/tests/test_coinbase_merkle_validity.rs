@@ -42,6 +42,32 @@
 //! # macOS
 //! brew install capnproto
 //! ```
+//!
+//! ## Running the Test
+//! ```bash
+//! # Run specific test
+//! cargo nextest run --manifest-path integration-tests/Cargo.toml test_coinbase_merkle_validity
+//!
+//! # Or with cargo test
+//! cargo test --manifest-path integration-tests/Cargo.toml test_coinbase_merkle_validity
+//! ```
+//!
+//! ## Expected Output
+//! If the test passes (expected behavior):
+//! - Mining device connects to pool
+//! - Receives initial job with Job ID X
+//! - Coinbase outputs are modified
+//! - New template triggers job generation with Job ID Y (different from X)
+//! - Mining device receives new job and mines
+//! - Submits share to pool
+//! - **Pool accepts share with SubmitSharesSuccess**
+//! - Test output: "✓ Core feasibility assumption validated"
+//!
+//! If the test fails (would invalidate approach):
+//! - Pool rejects share with SubmitSharesError
+//! - Error would likely be "Invalid merkle root"
+//! - Test panics with "FEASIBILITY TEST FAILED"
+//! - Would require architectural redesign of entire approach
 
 use integration_tests_sv2::*;
 use stratum_apps::stratum_core::{
