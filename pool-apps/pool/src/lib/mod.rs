@@ -32,6 +32,7 @@ mod monitoring;
 pub mod status;
 pub mod template_receiver;
 pub mod utils;
+pub mod webhook;
 
 #[derive(Debug, Clone)]
 pub struct PoolSv2 {
