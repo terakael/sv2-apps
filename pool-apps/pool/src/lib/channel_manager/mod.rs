@@ -744,17 +744,20 @@ impl ChannelManager {
         info!("Updating coinbase to address: {}...", &new_address[..8.min(new_address.len())]);
 
         // Phase 2: Read current template state (short lock)
-        let current_outputs_bytes = self.channel_manager_data.super_safe_lock(|data| {
-            data.coinbase_outputs.clone()
+        let last_template_value = self.channel_manager_data.super_safe_lock(|data| {
+            data.last_future_template
+                .as_ref()
+                .map(|t| t.coinbase_tx_value_remaining)
+                .unwrap_or(0)
         });
 
         // Phase 3: Compute new coinbase outputs (no locks held)
         // Create fresh coinbase output with new address
-        // The value will be calculated by on_new_template based on block reward + fees
+        // The value must match the template's coinbase_tx_value_remaining for validation
         use stratum_apps::stratum_core::bitcoin::{Amount, TxOut, ScriptBuf};
 
         let coinbase_outputs = vec![TxOut {
-            value: Amount::ZERO,  // Value will be set by on_new_template from template data
+            value: Amount::from_sat(last_template_value),
             script_pubkey: ScriptBuf::from_bytes(new_script_pubkey),
         }];
 
