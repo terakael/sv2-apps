@@ -749,18 +749,14 @@ impl ChannelManager {
         });
 
         // Phase 3: Compute new coinbase outputs (no locks held)
-        let mut coinbase_outputs = deserialize_outputs(current_outputs_bytes)
-            .map_err(|e| {
-                error!("Failed to deserialize coinbase outputs: {:?}", e);
-                PoolError::log(PoolErrorKind::Custom("Failed to deserialize current coinbase outputs".to_string()))
-            })?;
+        // Create fresh coinbase output with new address
+        // The value will be calculated by on_new_template based on block reward + fees
+        use stratum_apps::stratum_core::bitcoin::{Amount, TxOut, ScriptBuf};
 
-        // Replace the scriptPubKey with the new address, keep same value
-        if coinbase_outputs.is_empty() {
-            return Err(PoolError::log(PoolErrorKind::Custom("No coinbase outputs configured".to_string())));
-        }
-
-        coinbase_outputs[0].script_pubkey = stratum_apps::stratum_core::bitcoin::ScriptBuf::from_bytes(new_script_pubkey);
+        let coinbase_outputs = vec![TxOut {
+            value: Amount::ZERO,  // Value will be set by on_new_template from template data
+            script_pubkey: ScriptBuf::from_bytes(new_script_pubkey),
+        }];
 
         // Serialize back to bytes for storage
         let mut new_encoded_outputs = Vec::new();
