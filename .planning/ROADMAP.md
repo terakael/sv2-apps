@@ -46,10 +46,12 @@ Plans:
   3. Block solutions flagged with is_block=true in webhook payload
   4. Webhook delivery doesn't block pool operation (fire-and-forget pattern)
   5. Stale job mappings cleaned up on SetNewPrevHash to prevent memory leak
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: TBD during planning
+- [ ] 02-01-PLAN.md — Webhook client infrastructure with reqwest and fire-and-forget delivery
+- [ ] 02-02-PLAN.md — Job-to-user mapping in ChannelManager with SetNewPrevHash cleanup
+- [ ] 02-03-PLAN.md — Share validation webhook integration for standard and extended channels
 
 ### Phase 3: Concurrency Hardening and Performance
 **Goal**: System remains stable under concurrent load and meets sub-100ms performance target
@@ -73,7 +75,7 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. API Foundation and Template Switching | 0/4 | Not started | - |
-| 2. Share Attribution and Webhooks | 0/TBD | Not started | - |
+| 2. Share Attribution and Webhooks | 0/3 | Not started | - |
 | 3. Concurrency Hardening and Performance | 0/TBD | Not started | - |
 
 ---
