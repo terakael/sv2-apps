@@ -20,7 +20,7 @@ Sub-100ms coinbase switching enables fair time-shared mining by allowing rapid a
 - [ ] API validates address format and user_id constraints
 - [ ] Coinbase outputs updated in ChannelManager state
 - [ ] Jobs recreated from stored template with new coinbase
-- [ ] New jobs distributed to all connected miners (standard, extended, group channels)
+- [ ] New jobs distributed to all connected miners (standard channels only)
 - [ ] Miners receive updated jobs within 100ms of API call
 - [ ] Share webhook notifications sent when shares validated by pool
 - [ ] Webhook payload includes user_id, share hash, difficulty, job_id, timestamp
@@ -34,6 +34,7 @@ Sub-100ms coinbase switching enables fair time-shared mining by allowing rapid a
 
 ### Out of Scope
 
+- Extended/group channels — standard channels sufficient for MVP, add when full share proofs needed
 - Production authentication (bearer tokens) — localhost-only binding for MVP
 - Sophisticated rate limiting — basic protection only
 - Advanced webhook retry logic — simple exponential backoff sufficient
