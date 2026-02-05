@@ -5,33 +5,34 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Sub-100ms coinbase switching enables fair time-shared mining by allowing rapid address rotation while miners continuously work, without waiting for Bitcoin Core template updates.
-**Current focus:** Phase 1 - API Foundation and Template Switching
+**Current focus:** Phase 2 - Share Attribution and Webhooks
 
 ## Current Position
 
-Phase: 1 of 3 (API Foundation and Template Switching)
-Plan: 3 of 4 in current phase
+Phase: 2 of 3 (Share Attribution and Webhooks)
+Plan: 1 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-05 — Completed 01-03-PLAN.md
+Last activity: 2026-02-05 — Completed 02-01-PLAN.md
 
-Progress: [███████░░░] 75% (3/4 plans complete in phase 1)
+Progress: [████████░░] 80% (4/5 plans complete across phases 1-2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 11.7 min
-- Total execution time: 0.58 hours
+- Total plans completed: 4
+- Average duration: 9.8 min
+- Total execution time: 0.65 hours
 
 **By Phase:**
 
 | Phase | Plans | Total  | Avg/Plan |
 |-------|-------|--------|----------|
 | 01    | 3     | 35min  | 11.7min  |
+| 02    | 1     | 4min   | 4.0min   |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (9min), 01-02 (12min est), 01-03 (14min)
-- Trend: Steady velocity, slight increase due to bug fixes
+- Last 5 plans: 01-01 (9min), 01-02 (12min est), 01-03 (14min), 02-01 (4min)
+- Trend: Phase 2 starting with fast infrastructure work
 
 *Updated after each plan completion*
 
@@ -53,6 +54,9 @@ Recent decisions affecting current work:
 - **01-03:** Added extended channel support — original implementation only handled standard channels
 - **01-03:** Made coinbase_outputs pub(crate) — supports test infrastructure from Plan 01-02
 - **01-03:** Added axum as direct dependency — unblocks http_api compilation
+- **02-01:** reqwest over hyper for HTTP client — higher-level API with built-in connection pooling
+- **02-01:** 5-second webhook timeout — prevents hanging on slow endpoints
+- **02-01:** Fire-and-forget webhook pattern — tokio::spawn ensures pool operations never wait for HTTP responses
 
 ### Pending Todos
 
@@ -69,6 +73,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-05 05:59:46 UTC
-Stopped at: Completed 01-03-PLAN.md (ChannelManager coinbase update and job broadcast)
+Last session: 2026-02-05 11:27:23 UTC
+Stopped at: Completed 02-01-PLAN.md (Webhook infrastructure with reqwest and fire-and-forget delivery)
 Resume file: None
