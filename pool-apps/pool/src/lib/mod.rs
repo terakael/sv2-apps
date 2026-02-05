@@ -26,6 +26,7 @@ pub mod channel_manager;
 pub mod config;
 pub mod downstream;
 pub mod error;
+pub mod http_api;
 mod io_task;
 mod monitoring;
 pub mod status;
@@ -36,6 +37,8 @@ pub mod utils;
 pub struct PoolSv2 {
     config: PoolConfig,
     notify_shutdown: broadcast::Sender<ShutdownMessage>,
+    #[cfg(test)]
+    channel_manager: std::sync::Arc<std::sync::Mutex<Option<ChannelManager>>>,
 }
 
 #[cfg_attr(not(test), hotpath::measure_all)]
@@ -46,6 +49,8 @@ impl PoolSv2 {
         Self {
             config,
             notify_shutdown,
+            #[cfg(test)]
+            channel_manager: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -83,6 +88,12 @@ impl PoolSv2 {
             encoded_outputs.clone(),
         )
         .await?;
+
+        // Store channel_manager for test access
+        #[cfg(test)]
+        {
+            *self.channel_manager.lock().unwrap() = Some(channel_manager.clone());
+        }
 
         // Start monitoring server if configured
         if let Some(monitoring_addr) = self.config.monitoring_address() {
@@ -257,6 +268,24 @@ impl PoolSv2 {
         task_manager.join_all().await;
         info!("Pool shutdown complete.");
         Ok(())
+    }
+
+    /// Test-only method to modify coinbase_outputs in ChannelManager.
+    ///
+    /// This simulates what the HTTP API will do in production: modify the coinbase
+    /// outputs to switch payout addresses.
+    ///
+    /// # Purpose
+    /// Enables integration tests to validate that shares are accepted after coinbase
+    /// modification, proving merkle path validity (TMPL-05 feasibility assumption).
+    #[cfg(test)]
+    pub fn test_set_coinbase_outputs(&self, new_encoded_outputs: Vec<u8>) {
+        let channel_manager = self.channel_manager.lock().unwrap();
+        if let Some(cm) = channel_manager.as_ref() {
+            cm.channel_manager_data.super_safe_lock(|data| {
+                data.coinbase_outputs = new_encoded_outputs;
+            });
+        }
     }
 }
 
