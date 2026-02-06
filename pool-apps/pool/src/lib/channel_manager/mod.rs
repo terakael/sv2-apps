@@ -926,6 +926,131 @@ impl ChannelManager {
         Ok(())
     }
 
+    /// Updates shares_per_minute for all channels and immediately recalculates targets.
+    ///
+    /// Unlike pool_tag which only affects new channels, shares_per_minute affects
+    /// existing channels and requires immediate target recalculation for all active channels.
+    ///
+    /// # Flow
+    /// 1. Update current_shares_per_minute in ChannelManagerData
+    /// 2. Iterate all downstream channels (standard and extended)
+    /// 3. For each channel, use vardiff.try_vardiff() with NEW shares_per_minute
+    /// 4. Send SetTarget message immediately (don't wait for vardiff loop)
+    ///
+    /// # Arguments
+    /// * `new_shares_per_minute` - Target shares per minute (typically 6.0 for single user, scaled down for multiple users)
+    ///
+    /// # Example
+    /// ```ignore
+    /// // 3 active users, distribute target: 6.0 / 3 = 2.0 shares/min per user
+    /// channel_manager.update_shares_per_minute(2.0).await?;
+    /// ```
+    pub async fn update_shares_per_minute(
+        &self,
+        new_shares_per_minute: SharesPerMinute,
+    ) -> PoolResult<(), error::ChannelManager> {
+        info!("Updating shares_per_minute to {}", new_shares_per_minute);
+
+        let messages = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
+            // Update stored value for future channel creation and vardiff cycles
+            channel_manager_data.current_shares_per_minute = new_shares_per_minute;
+
+            let mut messages: Vec<RouteMessageTo> = Vec::new();
+
+            // Iterate all downstreams and their channels
+            for (downstream_id, downstream) in channel_manager_data.downstream.iter_mut() {
+                downstream.downstream_data.super_safe_lock(|data| {
+                    // Update standard channels
+                    for (channel_id, channel) in data.standard_channels.iter_mut() {
+                        // Get vardiff state for this channel
+                        let vardiff_key = VardiffKey {
+                            downstream_id: *downstream_id,
+                            channel_id: *channel_id,
+                        };
+                        if let Some(vardiff_state) = channel_manager_data.vardiff.get_mut(&vardiff_key) {
+                            // Get current channel state
+                            let hashrate = channel.get_nominal_hashrate();
+                            let current_target = channel.get_target();
+
+                            // Use NEW shares_per_minute for vardiff calculation
+                            match vardiff_state.try_vardiff(hashrate, current_target, new_shares_per_minute) {
+                                Ok(Some(new_hashrate)) => {
+                                    // Update channel with new hashrate (which updates target)
+                                    match channel.update_channel(new_hashrate, None) {
+                                        Ok(()) => {
+                                            let updated_target = channel.get_target();
+                                            // Send SetTarget immediately
+                                            let set_target = SetTarget {
+                                                channel_id: *channel_id,
+                                                maximum_target: updated_target.to_le_bytes().into(),
+                                            };
+                                            messages.push(RouteMessageTo::Downstream((*downstream_id, Mining::SetTarget(set_target))));
+                                            info!("Updated target for standard channel {} to {:?}", channel_id, updated_target);
+                                        }
+                                        Err(e) => warn!("Failed to update standard channel {}: {:?}", channel_id, e),
+                                    }
+                                }
+                                Ok(None) => {
+                                    debug!("No target change needed for standard channel {}", channel_id);
+                                }
+                                Err(e) => warn!("Vardiff calculation failed for standard channel {}: {:?}", channel_id, e),
+                            }
+                        }
+                    }
+
+                    // Update extended channels
+                    for (channel_id, channel) in data.extended_channels.iter_mut() {
+                        // Get vardiff state for this channel
+                        let vardiff_key = VardiffKey {
+                            downstream_id: *downstream_id,
+                            channel_id: *channel_id,
+                        };
+                        if let Some(vardiff_state) = channel_manager_data.vardiff.get_mut(&vardiff_key) {
+                            // Get current channel state
+                            let hashrate = channel.get_nominal_hashrate();
+                            let current_target = channel.get_target();
+
+                            // Use NEW shares_per_minute for vardiff calculation
+                            match vardiff_state.try_vardiff(hashrate, current_target, new_shares_per_minute) {
+                                Ok(Some(new_hashrate)) => {
+                                    // Update channel with new hashrate (which updates target)
+                                    match channel.update_channel(new_hashrate, None) {
+                                        Ok(()) => {
+                                            let updated_target = channel.get_target();
+                                            // Send SetTarget immediately
+                                            let set_target = SetTarget {
+                                                channel_id: *channel_id,
+                                                maximum_target: updated_target.to_le_bytes().into(),
+                                            };
+                                            messages.push(RouteMessageTo::Downstream((*downstream_id, Mining::SetTarget(set_target))));
+                                            info!("Updated target for extended channel {} to {:?}", channel_id, updated_target);
+                                        }
+                                        Err(e) => warn!("Failed to update extended channel {}: {:?}", channel_id, e),
+                                    }
+                                }
+                                Ok(None) => {
+                                    debug!("No target change needed for extended channel {}", channel_id);
+                                }
+                                Err(e) => warn!("Vardiff calculation failed for extended channel {}: {:?}", channel_id, e),
+                            }
+                        }
+                    }
+                });
+            }
+
+            Ok(messages)
+        })?;
+
+        // Send messages outside lock
+        let message_count = messages.len();
+        for message in messages {
+            message.forward(&self.channel_manager_channel).await;
+        }
+
+        info!("Shares per minute update complete: {} channels updated", message_count);
+        Ok(())
+    }
+
     /// Sends a CoinbaseOutputConstraints message to the template provider.
     ///
     /// # Purpose
