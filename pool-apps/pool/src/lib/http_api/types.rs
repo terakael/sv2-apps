@@ -109,6 +109,72 @@ impl CoinbaseUpdateResponse {
     }
 }
 
+/// Request to update the pool's shares_per_minute target.
+///
+/// ## Validation
+///
+/// - `shares_per_minute` must be positive
+/// - `shares_per_minute` must be between 0.1 and 60.0 (reasonable range)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SharesPerMinuteUpdateRequest {
+    pub shares_per_minute: f32,
+}
+
+impl SharesPerMinuteUpdateRequest {
+    /// Validates request constraints.
+    ///
+    /// ## Returns
+    ///
+    /// - `Ok(())` if validation passes
+    /// - `Err(String)` with descriptive error message if validation fails
+    ///
+    /// ## Validation Rules
+    ///
+    /// - shares_per_minute must be positive
+    /// - shares_per_minute must be >= 0.1 (minimum reasonable difficulty)
+    /// - shares_per_minute must be <= 60.0 (maximum reasonable difficulty)
+    pub fn validate(&self) -> Result<(), String> {
+        // shares_per_minute must be positive and reasonable (0.1 to 60.0)
+        if self.shares_per_minute <= 0.0 {
+            return Err("shares_per_minute must be positive".to_string());
+        }
+        if self.shares_per_minute > 60.0 {
+            return Err("shares_per_minute exceeds maximum (60.0)".to_string());
+        }
+        if self.shares_per_minute < 0.1 {
+            return Err("shares_per_minute below minimum (0.1)".to_string());
+        }
+        Ok(())
+    }
+}
+
+/// Response from shares_per_minute update operation.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SharesPerMinuteUpdateResponse {
+    /// Whether the operation succeeded
+    pub success: bool,
+    /// Human-readable message describing the result
+    pub message: String,
+}
+
+impl SharesPerMinuteUpdateResponse {
+    /// Creates a success response with the given message.
+    pub fn success(message: impl Into<String>) -> Self {
+        Self {
+            success: true,
+            message: message.into(),
+        }
+    }
+
+    /// Creates an error response with the given message.
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            message: message.into(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

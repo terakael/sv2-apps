@@ -32,7 +32,7 @@ use crate::channel_manager::ChannelManager;
 pub mod handlers;
 pub mod types;
 
-pub use types::{CoinbaseUpdateRequest, CoinbaseUpdateResponse};
+pub use types::{CoinbaseUpdateRequest, CoinbaseUpdateResponse, SharesPerMinuteUpdateRequest, SharesPerMinuteUpdateResponse};
 
 /// Creates the HTTP API router with all endpoints configured.
 ///
@@ -44,9 +44,11 @@ pub use types::{CoinbaseUpdateRequest, CoinbaseUpdateResponse};
 ///
 /// # Endpoints
 /// - `POST /api/coinbase` - Update coinbase address (see handlers::handle_coinbase_update)
+/// - `POST /update-shares-per-minute` - Update shares_per_minute target (see handlers::handle_shares_per_minute_update)
 pub fn create_router(channel_manager: ChannelManager) -> Router {
     Router::new()
         .route("/api/coinbase", post(handlers::handle_coinbase_update))
+        .route("/update-shares-per-minute", post(handlers::handle_shares_per_minute_update))
         .with_state(channel_manager)
 }
 

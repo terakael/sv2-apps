@@ -12,7 +12,7 @@ use axum::{
 use tracing::{error, info};
 
 use crate::channel_manager::ChannelManager;
-use super::types::{CoinbaseUpdateRequest, CoinbaseUpdateResponse};
+use super::types::{CoinbaseUpdateRequest, CoinbaseUpdateResponse, SharesPerMinuteUpdateRequest, SharesPerMinuteUpdateResponse};
 
 /// Handles POST /api/coinbase requests to update the pool's coinbase output address.
 ///
@@ -77,6 +77,62 @@ pub async fn handle_coinbase_update(
                         "Internal server error".to_string()
                     }
                 )),
+            )
+        }
+    }
+}
+
+/// Handles POST /update-shares-per-minute requests to update mining difficulty target.
+///
+/// # Request Flow
+/// 1. Validates shares_per_minute constraints (positive, reasonable range)
+/// 2. Calls ChannelManager to update all channels immediately
+/// 3. ChannelManager recalculates targets and broadcasts SetTarget messages
+///
+/// # Response Codes
+/// - 200: Success - shares_per_minute updated and targets recalculated
+/// - 400: Bad request - invalid shares_per_minute value
+/// - 500: Internal error - pool error during update
+///
+/// # Example
+/// ```bash
+/// # 3 active users, distribute 6.0 shares/min: 6.0 / 3 = 2.0
+/// curl -X POST http://localhost:8080/update-shares-per-minute \
+///   -H "Content-Type: application/json" \
+///   -d '{"shares_per_minute": 2.0}'
+/// ```
+pub async fn handle_shares_per_minute_update(
+    State(channel_manager): State<ChannelManager>,
+    Json(req): Json<SharesPerMinuteUpdateRequest>,
+) -> impl IntoResponse {
+    // Phase 1: Validate request
+    if let Err(e) = req.validate() {
+        info!("Shares per minute update rejected: {}", e);
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(SharesPerMinuteUpdateResponse::error(e)),
+        );
+    }
+
+    info!("Processing shares_per_minute update: {}", req.shares_per_minute);
+
+    // Phase 2: Call ChannelManager update
+    match channel_manager.update_shares_per_minute(req.shares_per_minute).await {
+        Ok(_) => {
+            info!("Shares per minute update successful: {}", req.shares_per_minute);
+            (
+                StatusCode::OK,
+                Json(SharesPerMinuteUpdateResponse::success(
+                    format!("Shares per minute updated to {}", req.shares_per_minute)
+                )),
+            )
+        }
+        Err(e) => {
+            let error_msg = e.to_string();
+            error!("Shares per minute update failed: {}", error_msg);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(SharesPerMinuteUpdateResponse::error("Internal server error")),
             )
         }
     }
