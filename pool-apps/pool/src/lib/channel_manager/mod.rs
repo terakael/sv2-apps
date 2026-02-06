@@ -843,17 +843,8 @@ impl ChannelManager {
                         })?;
 
                     // Get the updated job from group channel
-                    // If it's a future template, get the future job that was just created
-                    // Otherwise, get the active job
-                    let group_channel_job = if last_future_template.future_template {
-                        let future_job_id = data.group_channel.get_future_job_id_from_template_id(last_future_template.template_id)
-                            .ok_or_else(|| PoolError::shutdown(PoolErrorKind::JobNotFound))?;
-                        data.group_channel.get_future_job(future_job_id)
-                            .ok_or_else(|| PoolError::shutdown(PoolErrorKind::JobNotFound))?
-                    } else {
-                        data.group_channel.get_active_job()
-                            .ok_or_else(|| PoolError::shutdown(PoolErrorKind::JobNotFound))?
-                    };
+                    let group_channel_job = data.group_channel.get_active_job()
+                        .ok_or_else(|| PoolError::shutdown(PoolErrorKind::JobNotFound))?;
 
                     // Check if this downstream requires standard jobs
                     let requires_standard_jobs = downstream.requires_standard_jobs.load(Ordering::SeqCst);
@@ -883,18 +874,9 @@ impl ChannelManager {
                                 })?;
 
                             // Send NewMiningJob to standard channel
-                            // If it's a future template, get the future job that was just created
-                            // Otherwise, get the active job
-                            let standard_job = if last_future_template.future_template {
-                                let future_job_id = standard_channel.get_future_job_id_from_template_id(last_future_template.template_id)
-                                    .ok_or_else(|| PoolError::shutdown(PoolErrorKind::JobNotFound))?;
-                                standard_channel.get_future_job(future_job_id)
-                                    .ok_or_else(|| PoolError::shutdown(PoolErrorKind::JobNotFound))?
-                            } else {
-                                standard_channel.get_active_job()
-                                    .ok_or_else(|| PoolError::shutdown(PoolErrorKind::JobNotFound))?
-                            };
-                            messages.push((*downstream_id, Mining::NewMiningJob(standard_job.get_job_message().clone())).into());
+                            if let Some(standard_job) = standard_channel.get_active_job() {
+                                messages.push((*downstream_id, Mining::NewMiningJob(standard_job.get_job_message().clone())).into());
+                            }
                         }
                     }
 
@@ -919,14 +901,7 @@ impl ChannelManager {
 
                     // Standard channel job IDs (if any)
                     for (_channel_id, standard_channel) in data.standard_channels.iter() {
-                        let standard_job = if last_future_template.future_template {
-                            standard_channel.get_future_job_id_from_template_id(last_future_template.template_id)
-                                .and_then(|job_id| standard_channel.get_future_job(job_id))
-                        } else {
-                            standard_channel.get_active_job()
-                        };
-
-                        if let Some(standard_job) = standard_job {
+                        if let Some(standard_job) = standard_channel.get_active_job() {
                             let standard_job_id = standard_job.get_job_id();
                             channel_manager_data.job_to_user.insert(standard_job_id, user_id.clone());
                         }
