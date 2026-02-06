@@ -93,6 +93,10 @@ pub struct ChannelManagerData {
     /// Set via coinbase API, defaults to config.pool_signature()
     /// Used when creating channels to identify pool in mined blocks
     current_pool_tag: String,
+    /// Current shares_per_minute target for all channels
+    /// Set via shares_per_minute API, defaults to config.shares_per_minute()
+    /// Used for vardiff calculation and immediate target updates
+    current_shares_per_minute: SharesPerMinute,
 }
 
 #[derive(Clone)]
@@ -111,7 +115,6 @@ pub struct ChannelManager {
     pub(crate) channel_manager_data: Arc<Mutex<ChannelManagerData>>,
     channel_manager_channel: ChannelManagerChannel,
     share_batch_size: usize,
-    shares_per_minute: SharesPerMinute,
     coinbase_reward_script: CoinbaseRewardScript,
     /// Protocol extensions that the pool supports (will accept if requested by clients).
     supported_extensions: Vec<u16>,
@@ -205,6 +208,7 @@ impl ChannelManager {
             job_to_user: HashMap::new(),
             current_user_id: "unknown".to_string(),
             current_pool_tag: config.pool_signature().to_string(),
+            current_shares_per_minute: config.shares_per_minute(),
         }));
 
         let channel_manager_channel = ChannelManagerChannel {
@@ -218,7 +222,6 @@ impl ChannelManager {
             channel_manager_data,
             channel_manager_channel,
             share_batch_size: config.share_batch_size(),
-            shares_per_minute: config.shares_per_minute(),
             coinbase_reward_script: config.coinbase_reward_script().clone(),
             supported_extensions: config.supported_extensions().to_vec(),
             required_extensions: config.required_extensions().to_vec(),
@@ -995,7 +998,6 @@ impl std::fmt::Debug for ChannelManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ChannelManager")
             .field("share_batch_size", &self.share_batch_size)
-            .field("shares_per_minute", &self.shares_per_minute)
             .finish_non_exhaustive()
     }
 }
