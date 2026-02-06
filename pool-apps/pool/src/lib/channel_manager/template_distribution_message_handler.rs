@@ -185,42 +185,6 @@ impl HandleTemplateDistributionMessagesFromServerAsync for ChannelManager {
     ) -> Result<(), Self::Error> {
         info!("Received: {}", msg);
 
-        // CONC-03: Repopulate job mappings on SetNewPrevHash
-        // SetNewPrevHash doesn't change job_ids, but we refresh mappings with current_user_id
-        self.channel_manager_data.super_safe_lock(|data| {
-            let jobs_before = data.job_to_user.len();
-            data.job_to_user.clear();
-
-            // Repopulate with current user_id (persists across template updates)
-            let user_id = data.current_user_id.clone();
-            info!("SetNewPrevHash: repopulating job_to_user with user_id={}", user_id);
-
-            // Collect active job_ids from all downstreams
-            for (_downstream_id, downstream) in data.downstream.iter() {
-                let _ = downstream.downstream_data.super_safe_lock(|downstream_data| {
-                    // Group channel job (used by extended channels)
-                    if let Some(group_job) = downstream_data.group_channel.get_active_job() {
-                        let job_id = group_job.get_job_id();
-                        data.job_to_user.insert(job_id, user_id.clone());
-                    }
-
-                    // Standard channel jobs
-                    for (_channel_id, standard_channel) in downstream_data.standard_channels.iter() {
-                        if let Some(standard_job) = standard_channel.get_active_job() {
-                            let job_id = standard_job.get_job_id();
-                            data.job_to_user.insert(job_id, user_id.clone());
-                        }
-                    }
-                });
-            }
-
-            let jobs_after = data.job_to_user.len();
-            info!(
-                "Refreshed job mappings on SetNewPrevHash: {} -> {} (user_id={})",
-                jobs_before, jobs_after, user_id
-            );
-        });
-
         let messages = self.channel_manager_data.super_safe_lock(|data| {
             data.last_new_prev_hash = Some(msg.clone().into_static());
 
@@ -299,6 +263,40 @@ impl HandleTemplateDistributionMessagesFromServerAsync for ChannelManager {
 
                 messages.extend(downstream_messages);
             }
+
+            // CONC-03: Repopulate job mappings AFTER on_set_new_prev_hash updates
+            // This ensures we capture the job IDs that are actually active after state transitions
+            let jobs_before = data.job_to_user.len();
+            data.job_to_user.clear();
+
+            // Repopulate with current user_id (persists across template updates)
+            let user_id = data.current_user_id.clone();
+            info!("SetNewPrevHash: repopulating job_to_user with user_id={}", user_id);
+
+            // Collect active job_ids from all downstreams AFTER on_set_new_prev_hash
+            for (_downstream_id, downstream) in data.downstream.iter() {
+                let _ = downstream.downstream_data.super_safe_lock(|downstream_data| {
+                    // Group channel job (used by extended channels)
+                    if let Some(group_job) = downstream_data.group_channel.get_active_job() {
+                        let job_id = group_job.get_job_id();
+                        data.job_to_user.insert(job_id, user_id.clone());
+                    }
+
+                    // Standard channel jobs
+                    for (_channel_id, standard_channel) in downstream_data.standard_channels.iter() {
+                        if let Some(standard_job) = standard_channel.get_active_job() {
+                            let job_id = standard_job.get_job_id();
+                            data.job_to_user.insert(job_id, user_id.clone());
+                        }
+                    }
+                });
+            }
+
+            let jobs_after = data.job_to_user.len();
+            info!(
+                "Refreshed job mappings on SetNewPrevHash: {} -> {} (user_id={})",
+                jobs_before, jobs_after, user_id
+            );
 
             Ok::<Vec<RouteMessageTo<'_>>, Self::Error>(messages)
         })?;
