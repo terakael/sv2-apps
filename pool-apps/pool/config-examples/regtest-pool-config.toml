@@ -4,8 +4,8 @@ authority_secret_key = "mkDLTBBRxdBv998612qipDYoTK3YUrqLe8uWw7gu3iXbSrn2n"
 cert_validity_sec = 3600
 listen_address = "0.0.0.0:33333"
 
-# Regtest coinbase address - using a valid bech32 regtest address
-coinbase_reward_script = "addr(bcrt1q0s82uypdh3gw3r9mjlv86lerwxve2z2g3c37ad)"
+# Regtest coinbase address (bcrt1... format)
+coinbase_reward_script = "addr(bcrt1qmkwkajx3uv8c0f769f3qt92kjr3tkluj8ql2ze)"
 
 server_id = 1
 pool_signature = "Stratum V2 SRI Pool - Regtest"
@@ -17,15 +17,13 @@ supported_extensions = []
 required_extensions = []
 
 monitoring_address = "127.0.0.1:9090"
+webhook_url = "http://localhost:9000"
 
 # api_bind_addr defaults to 127.0.0.1:8080 if not specified
 # api_bind_addr = "127.0.0.1:8080"
 
-# Bitcoin Core IPC config
-# Connects directly to Bitcoin Core via IPC socket (node.sock)
-# Requires Bitcoin Core 30.0+ started with: bitcoin -m node -regtest -ipcbind=unix
+# Local Sv2 Template Provider config
 [template_provider_type.BitcoinCoreIpc]
 network = "regtest"
-# data_dir = "~/.bitcoin"  # Optional: override default data directory
 fee_threshold = 100
 min_interval = 5
