@@ -808,10 +808,13 @@ impl ChannelManager {
             }
 
             // Get last_future_template for job recreation
-            let last_future_template = channel_manager_data.last_future_template
+            // CRITICAL: Set future_template=false to make jobs active immediately
+            // This prevents job ID skipping when blocks arrive before activation
+            let mut last_future_template = channel_manager_data.last_future_template
                 .as_ref()
                 .ok_or_else(|| PoolError::log(PoolErrorKind::Custom("No template available for job recreation".to_string())))?
                 .clone();
+            last_future_template.future_template = false;
 
             let mut messages: Vec<RouteMessageTo> = Vec::new();
 
