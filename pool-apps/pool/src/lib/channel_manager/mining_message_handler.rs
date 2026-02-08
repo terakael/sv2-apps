@@ -597,7 +597,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                 };
 
                 let Some(vardiff) = channel_manager_data.vardiff.get_mut(&(downstream_id, channel_id).into()) else {
-                    return Ok(vec![(downstream_id, Mining::CloseChannel(create_close_channel_msg(channel_id, "invalid-channel-id"))).into()]);
+                    return Ok((vec![(downstream_id, Mining::CloseChannel(create_close_channel_msg(channel_id, "invalid-channel-id"))).into()], None));
                 };
 
                 let res = standard_channel.validate_share(msg.clone());
