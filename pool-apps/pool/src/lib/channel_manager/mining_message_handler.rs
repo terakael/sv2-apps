@@ -567,6 +567,12 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
             data.get_user_for_channel(&handle).map(|s| s.to_string())
         });
 
+        if let Some(ref uid) = user_id {
+            info!("Share from user {} on channel {}_{}", uid, downstream_id, msg.channel_id);
+        } else {
+            debug!("Share from unassigned channel {}_{}", downstream_id, msg.channel_id);
+        }
+
         let messages = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
             let channel_id = msg.channel_id;
 
@@ -723,9 +729,12 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
 
         // Send webhook if user is assigned
         if let Some(user_id) = user_id {
+            debug!("Attempting to send webhook for user {}", user_id);
             if let Err(e) = self.send_share_webhook(user_id, msg.channel_id, msg.sequence_number, is_valid).await {
                 warn!("Failed to send webhook: {:?}", e);
             }
+        } else {
+            debug!("No user assigned to channel, skipping webhook");
         }
 
         Ok(())

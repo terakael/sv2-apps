@@ -887,7 +887,14 @@ impl ChannelManager {
             data.share_webhook_url.clone()
         });
 
+        if webhook_url.is_none() {
+            debug!("No webhook URL configured, skipping webhook for user {}", user_id);
+            return Ok(());
+        }
+
         if let Some(url) = webhook_url {
+            info!("Sending webhook for user {} (channel {}, seq {}, valid: {})",
+                  user_id, channel_id, sequence_number, is_valid);
             #[derive(serde::Serialize)]
             struct ShareWebhookPayload {
                 user_id: String,
@@ -912,13 +919,16 @@ impl ChannelManager {
             tokio::spawn(async move {
                 match client.post(&url).json(&payload).send().await {
                     Ok(response) if response.status().is_success() => {
-                        debug!("Webhook sent for user {}", user_id);
+                        info!("✅ Webhook sent successfully for user {} (channel {}, seq {})",
+                              user_id, channel_id, sequence_number);
                     }
                     Ok(response) => {
-                        warn!("Webhook failed for user {}: {}", user_id, response.status());
+                        warn!("❌ Webhook failed for user {}: status {} (url: {})",
+                              user_id, response.status(), url);
                     }
                     Err(e) => {
-                        warn!("Webhook error for user {}: {}", user_id, e);
+                        warn!("❌ Webhook error for user {}: {} (url: {})",
+                              user_id, e, url);
                     }
                 }
             });
