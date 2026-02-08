@@ -936,7 +936,7 @@ impl ChannelManager {
         share_hash: Option<String>,
         is_block: bool,
     ) -> PoolResult<(), error::ChannelManager> {
-        let (webhook_url, coinbase_address, pool_tag) = self.channel_manager_data.super_safe_lock(|data| {
+        let (webhook_url, coinbase_address, pool_tag, block_target) = self.channel_manager_data.super_safe_lock(|data| {
             let webhook_url = data.share_webhook_url.clone();
             let network = data.network;
             let (coinbase_address, pool_tag) = data.user_to_channel
@@ -956,7 +956,15 @@ impl ChannelManager {
                     (address_str, mapping.coinbase_prefix_tag.clone())
                 })
                 .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
-            (webhook_url, coinbase_address, pool_tag)
+
+            // Get block target from last new prev hash (n_bits in compact form)
+            let block_target = data.last_new_prev_hash.as_ref().map(|prev_hash| {
+                use stratum_apps::stratum_core::bitcoin::{CompactTarget, Target};
+                let compact = CompactTarget::from_consensus(prev_hash.n_bits);
+                Target::from_compact(compact).to_string()
+            });
+
+            (webhook_url, coinbase_address, pool_tag, block_target)
         });
 
         if webhook_url.is_none() {
@@ -978,6 +986,7 @@ impl ChannelManager {
                 coinbase_prefix_tag: String,
                 share_hash: Option<String>,
                 is_block: bool,
+                block_target: Option<String>,
                 timestamp_secs: u64,
             }
 
@@ -991,6 +1000,7 @@ impl ChannelManager {
                 coinbase_prefix_tag: pool_tag,
                 share_hash,
                 is_block,
+                block_target,
                 timestamp_secs: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
