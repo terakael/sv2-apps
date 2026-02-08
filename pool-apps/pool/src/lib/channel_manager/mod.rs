@@ -536,12 +536,38 @@ impl ChannelManager {
     // Given a `downstream_id`, this method:
     // 1. Removes the corresponding Downstream from the `downstream` map.
     // 2. Removes the channels of the corresponding Downstream from `vardiff` map.
+    // 3. Removes all channels of the downstream from the round-robin assignment pool.
     #[allow(clippy::result_large_err)]
     fn remove_downstream(
         &self,
         downstream_id: DownstreamId,
     ) -> PoolResult<(), error::ChannelManager> {
         self.channel_manager_data.super_safe_lock(|cm_data| {
+            // Collect all channel IDs for this downstream before removing it
+            let channel_ids: Vec<ChannelId> = if let Some(downstream) = cm_data.downstream.get(&downstream_id) {
+                downstream
+                    .downstream_data
+                    .safe_lock(|dd| {
+                        let mut ids = Vec::new();
+                        ids.extend(dd.standard_channels.keys().copied());
+                        ids.extend(dd.extended_channels.keys().copied());
+                        ids
+                    })
+                    .unwrap_or_else(|_| Vec::new())
+            } else {
+                Vec::new()
+            };
+
+            // Unregister each channel from the assignment pool
+            for channel_id in channel_ids {
+                let handle = ChannelHandle {
+                    downstream_id,
+                    channel_id,
+                };
+                cm_data.unregister_channel(&handle);
+            }
+
+            // Remove the downstream and its vardiff entries
             cm_data.downstream.remove(&downstream_id);
             cm_data
                 .vardiff
