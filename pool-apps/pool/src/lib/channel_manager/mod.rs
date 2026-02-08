@@ -107,6 +107,10 @@ pub struct ChannelManagerData {
     pub(crate) channel_to_user: HashMap<ChannelHandle, UserChannelMapping>,
     // Webhook URL for share submissions
     pub(crate) share_webhook_url: Option<String>,
+    // Default user ID for auto-assignment
+    pub(crate) default_user_id: Option<String>,
+    // Default coinbase address for auto-assignment
+    pub(crate) default_coinbase_address: Option<ScriptBuf>,
 }
 
 #[derive(Clone)]
@@ -137,7 +141,22 @@ pub struct ChannelManager {
 impl ChannelManagerData {
     pub fn register_available_channel(&mut self, handle: ChannelHandle) {
         if !self.available_channels.contains(&handle) {
-            self.available_channels.push_back(handle);
+            self.available_channels.push_back(handle.clone());
+        }
+
+        // Automatically assign to default user if configured
+        if let (Some(default_user_id), Some(default_coinbase_address)) =
+            (&self.default_user_id, &self.default_coinbase_address)
+        {
+            // Only assign if this channel isn't already assigned to a user
+            if !self.channel_to_user.contains_key(&handle) {
+                self.assign_user_to_channel(
+                    default_user_id.clone(),
+                    handle,
+                    default_coinbase_address.clone(),
+                    default_user_id.clone(), // Use user_id as the tag
+                );
+            }
         }
     }
 
@@ -229,6 +248,8 @@ impl ChannelManager {
             user_to_channel: HashMap::new(),
             channel_to_user: HashMap::new(),
             share_webhook_url: None,
+            default_user_id: None,
+            default_coinbase_address: None,
         }));
 
         let channel_manager_channel = ChannelManagerChannel {

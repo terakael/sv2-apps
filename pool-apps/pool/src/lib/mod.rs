@@ -92,6 +92,27 @@ impl PoolSv2 {
             });
         }
 
+        // Initialize default user assignment if configured
+        if let (Some(default_user_id), Some(default_coinbase_address_str)) =
+            (self.config.default_user_id(), self.config.default_coinbase_address())
+        {
+            use stratum_apps::stratum_core::bitcoin::Address;
+            use std::str::FromStr;
+
+            match Address::from_str(&default_coinbase_address_str) {
+                Ok(address) => {
+                    let script_pubkey = address.assume_checked().script_pubkey();
+                    channel_manager.channel_manager_data.super_safe_lock(|data| {
+                        data.default_user_id = Some(default_user_id);
+                        data.default_coinbase_address = Some(script_pubkey);
+                    });
+                }
+                Err(e) => {
+                    error!("Invalid default coinbase address in config: {}", e);
+                }
+            }
+        }
+
         // Start monitoring server if configured
         if let Some(monitoring_addr) = self.config.monitoring_address() {
             info!(

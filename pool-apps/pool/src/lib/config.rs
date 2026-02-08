@@ -42,6 +42,10 @@ pub struct PoolConfig {
     monitoring_address: Option<SocketAddr>,
     #[serde(default)]
     share_webhook_url: Option<String>,
+    #[serde(default)]
+    default_user_id: Option<String>,
+    #[serde(default)]
+    default_coinbase_address: Option<String>,
 }
 
 impl PoolConfig {
@@ -78,6 +82,8 @@ impl PoolConfig {
             required_extensions,
             monitoring_address: None,
             share_webhook_url: None,
+            default_user_id: None,
+            default_coinbase_address: None,
         }
     }
 
@@ -172,6 +178,16 @@ impl PoolConfig {
     /// Returns the share webhook URL (optional).
     pub fn share_webhook_url(&self) -> Option<String> {
         self.share_webhook_url.clone()
+    }
+
+    /// Returns the default user ID (optional).
+    pub fn default_user_id(&self) -> Option<String> {
+        self.default_user_id.clone()
+    }
+
+    /// Returns the default coinbase address (optional).
+    pub fn default_coinbase_address(&self) -> Option<String> {
+        self.default_coinbase_address.clone()
     }
 }
 
