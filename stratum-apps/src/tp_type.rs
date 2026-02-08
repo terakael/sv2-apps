@@ -13,6 +13,17 @@ pub enum BitcoinNetwork {
 }
 
 impl BitcoinNetwork {
+    /// Convert to bitcoin::Network
+    pub fn to_bitcoin_network(&self) -> stratum_core::bitcoin::Network {
+        use stratum_core::bitcoin::Network;
+        match self {
+            BitcoinNetwork::Mainnet => Network::Bitcoin,
+            BitcoinNetwork::Testnet4 => Network::Testnet,
+            BitcoinNetwork::Signet => Network::Signet,
+            BitcoinNetwork::Regtest => Network::Regtest,
+        }
+    }
+
     /// Returns the subdirectory name for this network.
     /// Mainnet uses the root data directory.
     fn subdir(&self) -> Option<&'static str> {

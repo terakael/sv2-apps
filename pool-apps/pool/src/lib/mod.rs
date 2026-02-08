@@ -85,6 +85,12 @@ impl PoolSv2 {
         )
         .await?;
 
+        // Initialize network from template provider config (if using BitcoinCoreIpc)
+        let network = self.config.network();
+        channel_manager.channel_manager_data.super_safe_lock(|data| {
+            data.network = network;
+        });
+
         // Initialize webhook URL if configured
         if let Some(webhook_url) = self.config.share_webhook_url() {
             channel_manager.channel_manager_data.super_safe_lock(|data| {
@@ -93,24 +99,13 @@ impl PoolSv2 {
         }
 
         // Initialize default user assignment if configured
-        if let (Some(default_user_id), Some(default_coinbase_address_str)) =
-            (self.config.default_user_id(), self.config.default_coinbase_address())
-        {
-            use stratum_apps::stratum_core::bitcoin::Address;
-            use std::str::FromStr;
-
-            match Address::from_str(&default_coinbase_address_str) {
-                Ok(address) => {
-                    let script_pubkey = address.assume_checked().script_pubkey();
-                    channel_manager.channel_manager_data.super_safe_lock(|data| {
-                        data.default_user_id = Some(default_user_id);
-                        data.default_coinbase_address = Some(script_pubkey);
-                    });
-                }
-                Err(e) => {
-                    error!("Invalid default coinbase address in config: {}", e);
-                }
-            }
+        // Uses the pool's coinbase_reward_script as the default coinbase address
+        if let Some(default_user_id) = self.config.default_user_id() {
+            let default_script = self.config.coinbase_reward_script().script_pubkey();
+            channel_manager.channel_manager_data.super_safe_lock(|data| {
+                data.default_user_id = Some(default_user_id);
+                data.default_coinbase_script = Some(default_script);
+            });
         }
 
         // Start monitoring server if configured

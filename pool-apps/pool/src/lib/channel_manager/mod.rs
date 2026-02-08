@@ -17,7 +17,7 @@ use stratum_apps::{
     key_utils::{Secp256k1PublicKey, Secp256k1SecretKey},
     network_helpers::noise_stream::NoiseTcpStream,
     stratum_core::{
-        bitcoin::{script::ScriptBuf, Amount, TxOut},
+        bitcoin::{script::ScriptBuf, Amount, Network, TxOut},
         channels_sv2::{
             server::{
                 extended::ExtendedChannel,
@@ -109,8 +109,10 @@ pub struct ChannelManagerData {
     pub(crate) share_webhook_url: Option<String>,
     // Default user ID for auto-assignment
     pub(crate) default_user_id: Option<String>,
-    // Default coinbase address for auto-assignment
-    pub(crate) default_coinbase_address: Option<ScriptBuf>,
+    // Default coinbase address for auto-assignment (from coinbase_reward_script)
+    pub(crate) default_coinbase_script: Option<ScriptBuf>,
+    // Configured network (from template provider config, if using BitcoinCoreIpc)
+    pub(crate) network: Option<Network>,
 }
 
 #[derive(Clone)]
@@ -145,15 +147,15 @@ impl ChannelManagerData {
         }
 
         // Automatically assign to default user if configured
-        if let (Some(default_user_id), Some(default_coinbase_address)) =
-            (&self.default_user_id, &self.default_coinbase_address)
+        if let (Some(default_user_id), Some(default_coinbase_script)) =
+            (&self.default_user_id, &self.default_coinbase_script)
         {
             // Only assign if this channel isn't already assigned to a user
             if !self.channel_to_user.contains_key(&handle) {
                 self.assign_user_to_channel(
                     default_user_id.clone(),
                     handle,
-                    default_coinbase_address.clone(),
+                    default_coinbase_script.clone(),
                     default_user_id.clone(), // Use user_id as the tag
                 );
             }
@@ -249,7 +251,8 @@ impl ChannelManager {
             channel_to_user: HashMap::new(),
             share_webhook_url: None,
             default_user_id: None,
-            default_coinbase_address: None,
+            default_coinbase_script: None,
+            network: None, // Will be updated from config
         }));
 
         let channel_manager_channel = ChannelManagerChannel {
@@ -936,13 +939,23 @@ impl ChannelManager {
     ) -> PoolResult<(), error::ChannelManager> {
         let (webhook_url, coinbase_address, pool_tag) = self.channel_manager_data.super_safe_lock(|data| {
             let webhook_url = data.share_webhook_url.clone();
+            let network = data.network;
             let (coinbase_address, pool_tag) = data.user_to_channel
                 .get(&user_id)
                 .and_then(|handle| data.channel_to_user.get(handle))
-                .map(|mapping| (
-                    mapping.coinbase_address.to_hex_string(),
-                    mapping.coinbase_prefix_tag.clone()
-                ))
+                .map(|mapping| {
+                    // Convert ScriptBuf to Bitcoin address string using configured network
+                    use stratum_apps::stratum_core::bitcoin::Address;
+                    let address_str = if let Some(net) = network {
+                        Address::from_script(&mapping.coinbase_address, net)
+                            .map(|addr| addr.to_string())
+                            .unwrap_or_else(|_| mapping.coinbase_address.to_hex_string())
+                    } else {
+                        // No network configured (using Sv2Tp), fallback to hex
+                        mapping.coinbase_address.to_hex_string()
+                    };
+                    (address_str, mapping.coinbase_prefix_tag.clone())
+                })
                 .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
             (webhook_url, coinbase_address, pool_tag)
         });

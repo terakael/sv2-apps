@@ -44,8 +44,6 @@ pub struct PoolConfig {
     share_webhook_url: Option<String>,
     #[serde(default)]
     default_user_id: Option<String>,
-    #[serde(default)]
-    default_coinbase_address: Option<String>,
 }
 
 impl PoolConfig {
@@ -83,7 +81,6 @@ impl PoolConfig {
             monitoring_address: None,
             share_webhook_url: None,
             default_user_id: None,
-            default_coinbase_address: None,
         }
     }
 
@@ -185,9 +182,15 @@ impl PoolConfig {
         self.default_user_id.clone()
     }
 
-    /// Returns the default coinbase address (optional).
-    pub fn default_coinbase_address(&self) -> Option<String> {
-        self.default_coinbase_address.clone()
+    /// Returns the network from the template provider config.
+    /// Returns None if using Sv2Tp (which doesn't have a network field).
+    pub fn network(&self) -> Option<stratum_apps::stratum_core::bitcoin::Network> {
+        match &self.template_provider_type {
+            TemplateProviderType::BitcoinCoreIpc { network, .. } => {
+                Some(network.to_bitcoin_network())
+            }
+            TemplateProviderType::Sv2Tp { .. } => None,
+        }
     }
 }
 
