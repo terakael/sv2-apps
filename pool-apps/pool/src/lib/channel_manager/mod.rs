@@ -880,35 +880,60 @@ impl ChannelManager {
         &self,
         user_id: String,
         channel_id: ChannelId,
+        job_id: u32,
         sequence_number: u32,
+        nonce: u32,
+        ntime: u32,
+        version: u32,
         is_valid: bool,
     ) -> PoolResult<(), error::ChannelManager> {
-        let webhook_url = self.channel_manager_data.super_safe_lock(|data| {
-            data.share_webhook_url.clone()
+        let (webhook_url, coinbase_address, pool_tag) = self.channel_manager_data.super_safe_lock(|data| {
+            let webhook_url = data.share_webhook_url.clone();
+            let (coinbase_address, pool_tag) = data.user_to_channel
+                .get(&user_id)
+                .and_then(|handle| data.channel_to_user.get(handle))
+                .map(|mapping| (
+                    mapping.coinbase_address.to_hex_string(),
+                    mapping.coinbase_prefix_tag.clone()
+                ))
+                .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
+            (webhook_url, coinbase_address, pool_tag)
         });
 
         if webhook_url.is_none() {
-            debug!("No webhook URL configured, skipping webhook for user {}", user_id);
+            info!("No webhook URL configured, skipping webhook for user {}", user_id);
             return Ok(());
         }
 
         if let Some(url) = webhook_url {
-            info!("Sending webhook for user {} (channel {}, seq {}, valid: {})",
-                  user_id, channel_id, sequence_number, is_valid);
+            info!("Sending webhook for user {} (channel {}, job {}, seq {}, valid: {})",
+                  user_id, channel_id, job_id, sequence_number, is_valid);
             #[derive(serde::Serialize)]
             struct ShareWebhookPayload {
                 user_id: String,
                 channel_id: u32,
+                job_id: u32,
                 sequence_number: u32,
+                nonce: u32,
+                ntime: u32,
+                version: u32,
                 is_valid: bool,
+                coinbase_address: String,
+                pool_tag: String,
                 timestamp_secs: u64,
             }
 
             let payload = ShareWebhookPayload {
                 user_id: user_id.clone(),
                 channel_id,
+                job_id,
                 sequence_number,
+                nonce,
+                ntime,
+                version,
                 is_valid,
+                coinbase_address,
+                pool_tag,
                 timestamp_secs: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
@@ -919,8 +944,8 @@ impl ChannelManager {
             tokio::spawn(async move {
                 match client.post(&url).json(&payload).send().await {
                     Ok(response) if response.status().is_success() => {
-                        info!("✅ Webhook sent successfully for user {} (channel {}, seq {})",
-                              user_id, channel_id, sequence_number);
+                        info!("✅ Webhook sent successfully for user {} (channel {}, job {}, seq {})",
+                              user_id, channel_id, job_id, sequence_number);
                     }
                     Ok(response) => {
                         warn!("❌ Webhook failed for user {}: status {} (url: {})",
