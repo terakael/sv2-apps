@@ -189,6 +189,10 @@ pub enum PoolErrorKind {
     Configuration(String),
     /// Job not found
     JobNotFound,
+    /// No available channels for assignment
+    NoAvailableChannels,
+    /// Channel not found
+    ChannelNotFound,
 }
 
 impl std::fmt::Display for PoolErrorKind {
@@ -278,6 +282,8 @@ impl std::fmt::Display for PoolErrorKind {
             CouldNotInitiateSystem => write!(f, "Could not initiate subsystem"),
             Configuration(e) => write!(f, "Configuration error: {e}"),
             JobNotFound => write!(f, "Job not found"),
+            NoAvailableChannels => write!(f, "No available channels for assignment"),
+            ChannelNotFound => write!(f, "Channel not found"),
         }
     }
 }

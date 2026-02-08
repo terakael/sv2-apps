@@ -40,6 +40,8 @@ pub struct PoolConfig {
     required_extensions: Vec<u16>,
     #[serde(default)]
     monitoring_address: Option<SocketAddr>,
+    #[serde(default)]
+    share_webhook_url: Option<String>,
 }
 
 impl PoolConfig {
@@ -75,6 +77,7 @@ impl PoolConfig {
             supported_extensions,
             required_extensions,
             monitoring_address: None,
+            share_webhook_url: None,
         }
     }
 
@@ -164,6 +167,11 @@ impl PoolConfig {
     /// Returns the monitoring address (optional).
     pub fn monitoring_address(&self) -> Option<SocketAddr> {
         self.monitoring_address
+    }
+
+    /// Returns the share webhook URL (optional).
+    pub fn share_webhook_url(&self) -> Option<String> {
+        self.share_webhook_url.clone()
     }
 }
 

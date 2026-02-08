@@ -129,6 +129,7 @@ fn paginate<T: Clone>(items: &[T], params: &Pagination) -> (usize, Vec<T>) {
 pub struct MonitoringServer {
     bind_address: SocketAddr,
     state: ServerState,
+    custom_routes: Option<Router>,
 }
 
 impl MonitoringServer {
@@ -162,6 +163,7 @@ impl MonitoringServer {
                 start_time,
                 metrics,
             },
+            custom_routes: None,
         })
     }
 
@@ -180,6 +182,12 @@ impl MonitoringServer {
         )?;
 
         Ok(self)
+    }
+
+    /// Add custom routes to the monitoring server
+    pub fn with_management_routes(mut self, router: Router) -> Self {
+        self.custom_routes = Some(router);
+        self
     }
 
     /// Run the monitoring server until the shutdown signal completes
@@ -215,6 +223,13 @@ impl MonitoringServer {
             .nest("/api/v1", api_v1)
             .route("/metrics", get(handle_prometheus_metrics))
             .with_state(self.state);
+
+        // Merge custom routes if provided (these have their own state)
+        let app = if let Some(custom_routes) = self.custom_routes {
+            Router::new().merge(app).merge(custom_routes)
+        } else {
+            app
+        };
 
         let listener = TcpListener::bind(self.bind_address).await?;
 

@@ -22,6 +22,7 @@ use crate::{
     utils::ShutdownMessage,
 };
 
+pub mod api;
 pub mod channel_manager;
 pub mod config;
 pub mod downstream;
@@ -84,6 +85,13 @@ impl PoolSv2 {
         )
         .await?;
 
+        // Initialize webhook URL if configured
+        if let Some(webhook_url) = self.config.share_webhook_url() {
+            channel_manager.channel_manager_data.super_safe_lock(|data| {
+                data.share_webhook_url = Some(webhook_url);
+            });
+        }
+
         // Start monitoring server if configured
         if let Some(monitoring_addr) = self.config.monitoring_address() {
             info!(
@@ -91,12 +99,16 @@ impl PoolSv2 {
                 monitoring_addr
             );
 
+            // Create management API routes
+            let management_router = crate::api::management_routes(Arc::new(channel_manager.clone()));
+
             let monitoring_server = stratum_apps::monitoring::MonitoringServer::new(
                 monitoring_addr,
                 None, // Pool doesn't have channels opened with servers
                 Some(Arc::new(channel_manager.clone())), // channels opened with clients
             )
-            .expect("Failed to initialize monitoring server");
+            .expect("Failed to initialize monitoring server")
+            .with_management_routes(management_router);
 
             // Create shutdown signal that waits for ShutdownAll
             let mut notify_shutdown_monitoring = notify_shutdown.subscribe();

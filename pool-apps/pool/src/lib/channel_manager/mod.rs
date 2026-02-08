@@ -1,10 +1,11 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     net::SocketAddr,
     sync::{
         atomic::{AtomicU32, AtomicUsize},
         Arc,
     },
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use async_channel::{Receiver, Sender};
@@ -16,7 +17,7 @@ use stratum_apps::{
     key_utils::{Secp256k1PublicKey, Secp256k1SecretKey},
     network_helpers::noise_stream::NoiseTcpStream,
     stratum_core::{
-        bitcoin::{Amount, TxOut},
+        bitcoin::{script::ScriptBuf, Amount, TxOut},
         channels_sv2::{
             server::{
                 extended::ExtendedChannel,
@@ -56,6 +57,25 @@ const POOL_ALLOCATION_BYTES: usize = 4;
 const CLIENT_SEARCH_SPACE_BYTES: usize = 16;
 pub const FULL_EXTRANONCE_SIZE: usize = POOL_ALLOCATION_BYTES + CLIENT_SEARCH_SPACE_BYTES;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ChannelHandle {
+    pub downstream_id: DownstreamId,
+    pub channel_id: ChannelId,
+}
+
+impl std::fmt::Display for ChannelHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}", self.downstream_id, self.channel_id)
+    }
+}
+
+pub struct UserChannelMapping {
+    pub user_id: String,
+    pub coinbase_address: ScriptBuf,
+    pub coinbase_prefix_tag: String,
+    pub assigned_at: SystemTime,
+}
+
 pub struct ChannelManagerData {
     // Mapping of `downstream_id` → `Downstream` object,
     // used by the channel manager to locate and interact with downstream clients.
@@ -75,8 +95,18 @@ pub struct ChannelManagerData {
     coinbase_outputs: Vec<u8>,
     // Last new prevhash
     last_new_prev_hash: Option<SetNewPrevHash<'static>>,
+    // Last active template (currently being mined)
+    pub(crate) last_active_template: Option<NewTemplate<'static>>,
     // Last future template
     last_future_template: Option<NewTemplate<'static>>,
+    // Available channels for round-robin assignment
+    pub(crate) available_channels: VecDeque<ChannelHandle>,
+    // User ID to channel mapping
+    pub(crate) user_to_channel: HashMap<String, ChannelHandle>,
+    // Channel to user mapping
+    pub(crate) channel_to_user: HashMap<ChannelHandle, UserChannelMapping>,
+    // Webhook URL for share submissions
+    pub(crate) share_webhook_url: Option<String>,
 }
 
 #[derive(Clone)]
@@ -102,6 +132,53 @@ pub struct ChannelManager {
     supported_extensions: Vec<u16>,
     /// Protocol extensions that the pool requires (clients must support these).
     required_extensions: Vec<u16>,
+}
+
+impl ChannelManagerData {
+    pub fn register_available_channel(&mut self, handle: ChannelHandle) {
+        if !self.available_channels.contains(&handle) {
+            self.available_channels.push_back(handle);
+        }
+    }
+
+    pub fn unregister_channel(&mut self, handle: &ChannelHandle) {
+        self.available_channels.retain(|ch| ch != handle);
+        if let Some(user_mapping) = self.channel_to_user.remove(handle) {
+            self.user_to_channel.remove(&user_mapping.user_id);
+        }
+    }
+
+    pub fn get_next_available_channel(&mut self) -> Option<ChannelHandle> {
+        let handle = self.available_channels.pop_front()?;
+        self.available_channels.push_back(handle.clone());
+        Some(handle)
+    }
+
+    pub fn assign_user_to_channel(
+        &mut self,
+        user_id: String,
+        handle: ChannelHandle,
+        coinbase_address: ScriptBuf,
+        coinbase_prefix_tag: String,
+    ) {
+        if let Some(old_handle) = self.user_to_channel.remove(&user_id) {
+            self.channel_to_user.remove(&old_handle);
+        }
+
+        let mapping = UserChannelMapping {
+            user_id: user_id.clone(),
+            coinbase_address,
+            coinbase_prefix_tag,
+            assigned_at: SystemTime::now(),
+        };
+
+        self.user_to_channel.insert(user_id, handle.clone());
+        self.channel_to_user.insert(handle, mapping);
+    }
+
+    pub fn get_user_for_channel(&self, handle: &ChannelHandle) -> Option<&str> {
+        self.channel_to_user.get(handle).map(|m| m.user_id.as_str())
+    }
 }
 
 #[cfg_attr(not(test), hotpath::measure_all)]
@@ -145,8 +222,13 @@ impl ChannelManager {
             downstream_id_factory: AtomicUsize::new(1),
             vardiff: HashMap::new(),
             coinbase_outputs,
+            last_active_template: None,
             last_future_template: None,
             last_new_prev_hash: None,
+            available_channels: VecDeque::new(),
+            user_to_channel: HashMap::new(),
+            channel_to_user: HashMap::new(),
+            share_webhook_url: None,
         }));
 
         let channel_manager_channel = ChannelManagerChannel {
@@ -675,6 +757,172 @@ impl ChannelManager {
                 error!(error = ?e, "Failed to send CoinbaseOutputConstraints message to TP");
                 PoolError::shutdown(PoolErrorKind::ChannelErrorSender)
             })?;
+
+        Ok(())
+    }
+
+    /// Assigns a user to the next available channel with a custom coinbase address.
+    ///
+    /// This method:
+    /// 1. Gets the next available channel from the round-robin pool
+    /// 2. Stores the user → channel assignment
+    /// 3. Updates both active and future jobs with the new coinbase address
+    ///
+    /// # Returns
+    /// The `ChannelHandle` assigned to the user
+    pub async fn assign_user(
+        &self,
+        user_id: String,
+        coinbase_address: ScriptBuf,
+        coinbase_prefix_tag: String,
+    ) -> PoolResult<ChannelHandle, error::ChannelManager> {
+        // Get next available channel
+        let handle = self
+            .channel_manager_data
+            .super_safe_lock(|data| {
+                data.get_next_available_channel()
+                    .ok_or_else(|| PoolError::<error::ChannelManager>::shutdown(PoolErrorKind::NoAvailableChannels))
+            })
+            .map_err(|_| PoolError::<error::ChannelManager>::shutdown(PoolErrorKind::NoAvailableChannels))?;
+
+        // Store assignment
+        self.channel_manager_data.super_safe_lock(|data| {
+            data.assign_user_to_channel(
+                user_id.clone(),
+                handle.clone(),
+                coinbase_address.clone(),
+                coinbase_prefix_tag.clone(),
+            );
+        });
+
+        // Switch coinbase for this channel
+        self.switch_channel_coinbase(handle.clone(), coinbase_address)
+            .await?;
+
+        Ok(handle)
+    }
+
+    /// Switches the coinbase address for a specific channel.
+    ///
+    /// Updates both:
+    /// - Active job (currently being mined)
+    /// - Future job (pre-computed for next block)
+    async fn switch_channel_coinbase(
+        &self,
+        handle: ChannelHandle,
+        coinbase_address: ScriptBuf,
+    ) -> PoolResult<(), error::ChannelManager> {
+        let messages = self.channel_manager_data.super_safe_lock(|data| {
+            let downstream = data
+                .downstream
+                .get_mut(&handle.downstream_id)
+                .ok_or_else(|| {
+                    PoolError::shutdown(PoolErrorKind::DownstreamNotFound(handle.downstream_id))
+                })?;
+
+            downstream.downstream_data.super_safe_lock(|dd| {
+                let channel = dd
+                    .standard_channels
+                    .get_mut(&handle.channel_id)
+                    .ok_or_else(|| PoolError::shutdown(PoolErrorKind::ChannelNotFound))?;
+
+                let mut messages = Vec::new();
+
+                // Update ACTIVE job (currently being mined)
+                if let Some(active_template) = &data.last_active_template {
+                    let coinbase_output = TxOut {
+                        value: Amount::from_sat(active_template.coinbase_tx_value_remaining),
+                        script_pubkey: coinbase_address.clone(),
+                    };
+
+                    channel
+                        .on_new_template(active_template.clone(), vec![coinbase_output])
+                        .map_err(PoolError::shutdown)?;
+
+                    // Send updated active job immediately
+                    if let Some(job) = channel.get_active_job() {
+                        messages.push((
+                            handle.downstream_id,
+                            Mining::NewMiningJob(job.get_job_message().clone()),
+                        ));
+                    }
+                }
+
+                // Update FUTURE job (pre-computed for next block)
+                if let Some(future_template) = &data.last_future_template {
+                    let coinbase_output = TxOut {
+                        value: Amount::from_sat(future_template.coinbase_tx_value_remaining),
+                        script_pubkey: coinbase_address.clone(),
+                    };
+
+                    channel
+                        .on_new_template(future_template.clone(), vec![coinbase_output])
+                        .map_err(PoolError::shutdown)?;
+                }
+
+                Ok(messages)
+            })
+        })?;
+
+        // Send messages
+        for (downstream_id, message) in messages {
+            let route_msg: RouteMessageTo = (downstream_id, message).into();
+            route_msg.forward(&self.channel_manager_channel).await;
+        }
+
+        Ok(())
+    }
+
+    /// Sends a webhook notification for a share submission.
+    ///
+    /// Webhooks are sent asynchronously (fire-and-forget) to avoid blocking share processing.
+    pub async fn send_share_webhook(
+        &self,
+        user_id: String,
+        channel_id: ChannelId,
+        sequence_number: u32,
+        is_valid: bool,
+    ) -> PoolResult<(), error::ChannelManager> {
+        let webhook_url = self.channel_manager_data.super_safe_lock(|data| {
+            data.share_webhook_url.clone()
+        });
+
+        if let Some(url) = webhook_url {
+            #[derive(serde::Serialize)]
+            struct ShareWebhookPayload {
+                user_id: String,
+                channel_id: u32,
+                sequence_number: u32,
+                is_valid: bool,
+                timestamp_secs: u64,
+            }
+
+            let payload = ShareWebhookPayload {
+                user_id: user_id.clone(),
+                channel_id,
+                sequence_number,
+                is_valid,
+                timestamp_secs: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            };
+
+            let client = reqwest::Client::new();
+            tokio::spawn(async move {
+                match client.post(&url).json(&payload).send().await {
+                    Ok(response) if response.status().is_success() => {
+                        debug!("Webhook sent for user {}", user_id);
+                    }
+                    Ok(response) => {
+                        warn!("Webhook failed for user {}: {}", user_id, response.status());
+                    }
+                    Err(e) => {
+                        warn!("Webhook error for user {}: {}", user_id, e);
+                    }
+                }
+            });
+        }
 
         Ok(())
     }

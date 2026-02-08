@@ -37,6 +37,9 @@ impl HandleTemplateDistributionMessagesFromServerAsync for ChannelManager {
         let messages = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
             if msg.future_template {
                 channel_manager_data.last_future_template = Some(msg.clone().into_static());
+            } else {
+                // Non-future templates are immediately active (e.g., fee updates)
+                channel_manager_data.last_active_template = Some(msg.clone().into_static());
             }
 
             let mut messages: Vec<RouteMessageTo> = Vec::new();
@@ -164,6 +167,12 @@ impl HandleTemplateDistributionMessagesFromServerAsync for ChannelManager {
 
         let messages = self.channel_manager_data.super_safe_lock(|data| {
             data.last_new_prev_hash = Some(msg.clone().into_static());
+
+            // Transition future template to active when it's activated
+            if let Some(mut future_template) = data.last_future_template.clone() {
+                future_template.future_template = false;
+                data.last_active_template = Some(future_template);
+            }
 
             let mut messages: Vec<RouteMessageTo> = vec![];
 
