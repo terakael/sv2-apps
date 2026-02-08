@@ -573,7 +573,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
             info!("Share from unassigned channel {}_{}", downstream_id, msg.channel_id);
         }
 
-        let messages = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
+        let (messages, share_hash) = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
             let channel_id = msg.channel_id;
 
             let Some(downstream) = channel_manager_data.downstream.get(&downstream_id) else {
@@ -582,6 +582,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
 
             downstream.downstream_data.super_safe_lock(|downstream_data| {
                 let mut messages: Vec<RouteMessageTo> = Vec::new();
+                let mut share_hash: Option<String> = None;
                 let Some(standard_channel) = downstream_data.standard_channels.get_mut(&channel_id) else {
                     let submit_shares_error = SubmitSharesError {
                         channel_id,
@@ -592,7 +593,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                             .expect("error code must be valid string"),
                     };
                     error!("SubmitSharesError: downstream_id: {}, channel_id: {}, sequence_number: {}, error_code: invalid-channel-id ❌", downstream_id, channel_id, msg.sequence_number);
-                    return Ok(vec![(downstream_id, Mining::SubmitSharesError(submit_shares_error)).into()]);
+                    return Ok((vec![(downstream_id, Mining::SubmitSharesError(submit_shares_error)).into()], None));
                 };
 
                 let Some(vardiff) = channel_manager_data.vardiff.get_mut(&(downstream_id, channel_id).into()) else {
@@ -604,7 +605,8 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
 
 
                 match res {
-                    Ok(ShareValidationResult::Valid(share_hash)) => {
+                    Ok(ShareValidationResult::Valid(valid_share_hash)) => {
+                        share_hash = Some(format!("{}", valid_share_hash));
                         let share_accounting = standard_channel.get_share_accounting();
                         if share_accounting.should_acknowledge() {
                             let success = SubmitSharesSuccess {
@@ -619,13 +621,14 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                             let share_work = standard_channel.get_target().difficulty_float();
                             info!(
                                 "SubmitSharesStandard: valid share | downstream_id: {}, channel_id: {}, sequence_number: {}, share_hash: {}, share_work: {} ✅",
-                                downstream_id, channel_id, msg.sequence_number, share_hash, share_work
+                                downstream_id, channel_id, msg.sequence_number, valid_share_hash, share_work
                             );
                         }
 
                     }
-                    Ok(ShareValidationResult::BlockFound(share_hash, template_id, coinbase)) => {
-                        info!("SubmitSharesStandard: 💰 Block Found!!! 💰{share_hash}");
+                    Ok(ShareValidationResult::BlockFound(block_share_hash, template_id, coinbase)) => {
+                        share_hash = Some(format!("{}", block_share_hash));
+                        info!("SubmitSharesStandard: 💰 Block Found!!! 💰{}", block_share_hash);
                         // if we have a template id (i.e.: this was not a custom job)
                         // we can propagate the solution to the TP
                         if let Some(template_id) = template_id {
@@ -714,7 +717,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                     }
                 }
 
-                Ok(messages)
+                Ok((messages, share_hash))
             })
         })?;
 
@@ -739,6 +742,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                 msg.ntime,
                 msg.version,
                 is_valid,
+                share_hash,
             ).await {
                 warn!("Failed to send webhook: {:?}", e);
             }

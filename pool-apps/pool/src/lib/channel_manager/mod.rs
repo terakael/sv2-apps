@@ -936,6 +936,7 @@ impl ChannelManager {
         ntime: u32,
         version: u32,
         is_valid: bool,
+        share_hash: Option<String>,
     ) -> PoolResult<(), error::ChannelManager> {
         let (webhook_url, coinbase_address, pool_tag) = self.channel_manager_data.super_safe_lock(|data| {
             let webhook_url = data.share_webhook_url.clone();
@@ -979,7 +980,8 @@ impl ChannelManager {
                 version: u32,
                 is_valid: bool,
                 coinbase_address: String,
-                pool_tag: String,
+                coinbase_prefix_tag: String,
+                share_hash: Option<String>,
                 timestamp_secs: u64,
             }
 
@@ -993,7 +995,8 @@ impl ChannelManager {
                 version,
                 is_valid,
                 coinbase_address,
-                pool_tag,
+                coinbase_prefix_tag: pool_tag,
+                share_hash,
                 timestamp_secs: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
