@@ -573,7 +573,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
             info!("Share from unassigned channel {}_{}", downstream_id, msg.channel_id);
         }
 
-        let (messages, share_hash) = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
+        let (messages, share_hash, is_block) = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
             let channel_id = msg.channel_id;
 
             let Some(downstream) = channel_manager_data.downstream.get(&downstream_id) else {
@@ -583,6 +583,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
             downstream.downstream_data.super_safe_lock(|downstream_data| {
                 let mut messages: Vec<RouteMessageTo> = Vec::new();
                 let mut share_hash: Option<String> = None;
+                let mut is_block = false;
                 let Some(standard_channel) = downstream_data.standard_channels.get_mut(&channel_id) else {
                     let submit_shares_error = SubmitSharesError {
                         channel_id,
@@ -593,11 +594,11 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                             .expect("error code must be valid string"),
                     };
                     error!("SubmitSharesError: downstream_id: {}, channel_id: {}, sequence_number: {}, error_code: invalid-channel-id ❌", downstream_id, channel_id, msg.sequence_number);
-                    return Ok((vec![(downstream_id, Mining::SubmitSharesError(submit_shares_error)).into()], None));
+                    return Ok((vec![(downstream_id, Mining::SubmitSharesError(submit_shares_error)).into()], None, false));
                 };
 
                 let Some(vardiff) = channel_manager_data.vardiff.get_mut(&(downstream_id, channel_id).into()) else {
-                    return Ok((vec![(downstream_id, Mining::CloseChannel(create_close_channel_msg(channel_id, "invalid-channel-id"))).into()], None));
+                    return Ok((vec![(downstream_id, Mining::CloseChannel(create_close_channel_msg(channel_id, "invalid-channel-id"))).into()], None, false));
                 };
 
                 let res = standard_channel.validate_share(msg.clone());
@@ -628,6 +629,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                     }
                     Ok(ShareValidationResult::BlockFound(block_share_hash, template_id, coinbase)) => {
                         share_hash = Some(format!("{}", block_share_hash));
+                        is_block = true;
                         info!("SubmitSharesStandard: 💰 Block Found!!! 💰{}", block_share_hash);
                         // if we have a template id (i.e.: this was not a custom job)
                         // we can propagate the solution to the TP
@@ -717,14 +719,9 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                     }
                 }
 
-                Ok((messages, share_hash))
+                Ok((messages, share_hash, is_block))
             })
         })?;
-
-        // Determine if the share was valid based on the result (before consuming messages)
-        let is_valid = messages.iter().any(|m| {
-            matches!(m, RouteMessageTo::Downstream((_, Mining::SubmitSharesSuccess(_))))
-        });
 
         for message in messages {
             message.forward(&self.channel_manager_channel).await;
@@ -735,14 +732,12 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
             info!("Attempting to send webhook for user {}", user_id);
             if let Err(e) = self.send_share_webhook(
                 user_id,
-                msg.channel_id,
                 msg.job_id,
-                msg.sequence_number,
                 msg.nonce,
                 msg.ntime,
                 msg.version,
-                is_valid,
                 share_hash,
+                is_block,
             ).await {
                 warn!("Failed to send webhook: {:?}", e);
             }
