@@ -41,7 +41,9 @@ pub struct PoolConfig {
     #[serde(default)]
     monitoring_address: Option<SocketAddr>,
     #[serde(default)]
-    share_webhook_url: Option<String>,
+    redis_endpoint: Option<String>,
+    #[serde(default)]
+    redis_stream_name: Option<String>,
     #[serde(default)]
     default_user_id: Option<String>,
 }
@@ -79,7 +81,8 @@ impl PoolConfig {
             supported_extensions,
             required_extensions,
             monitoring_address: None,
-            share_webhook_url: None,
+            redis_endpoint: None,
+            redis_stream_name: None,
             default_user_id: None,
         }
     }
@@ -172,9 +175,14 @@ impl PoolConfig {
         self.monitoring_address
     }
 
-    /// Returns the share webhook URL (optional).
-    pub fn share_webhook_url(&self) -> Option<String> {
-        self.share_webhook_url.clone()
+    /// Returns the Redis endpoint URL (optional).
+    pub fn redis_endpoint(&self) -> Option<String> {
+        self.redis_endpoint.clone()
+    }
+
+    /// Returns the Redis stream name (optional, defaults to "shares").
+    pub fn redis_stream_name(&self) -> String {
+        self.redis_stream_name.clone().unwrap_or_else(|| "shares".to_string())
     }
 
     /// Returns the default user ID (optional).

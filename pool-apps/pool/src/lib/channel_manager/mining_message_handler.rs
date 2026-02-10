@@ -727,10 +727,10 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
             message.forward(&self.channel_manager_channel).await;
         }
 
-        // Send webhook if user is assigned
+        // Send share to Redis if user is assigned
         if let Some(user_id) = user_id {
-            info!("Attempting to send webhook for user {}", user_id);
-            if let Err(e) = self.send_share_webhook(
+            info!("Attempting to send share to Redis for user {}", user_id);
+            if let Err(e) = self.send_share_to_redis(
                 user_id,
                 msg.job_id,
                 msg.nonce,
@@ -739,10 +739,10 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                 share_hash,
                 is_block,
             ).await {
-                warn!("Failed to send webhook: {:?}", e);
+                warn!("Failed to send share to Redis: {:?}", e);
             }
         } else {
-            info!("No user assigned to channel, skipping webhook");
+            info!("No user assigned to channel, skipping Redis publish");
         }
 
         Ok(())

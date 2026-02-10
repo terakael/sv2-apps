@@ -91,11 +91,30 @@ impl PoolSv2 {
             data.network = network;
         });
 
-        // Initialize webhook URL if configured
-        if let Some(webhook_url) = self.config.share_webhook_url() {
-            channel_manager.channel_manager_data.super_safe_lock(|data| {
-                data.share_webhook_url = Some(webhook_url);
-            });
+        // Initialize Redis connection if configured
+        if let Some(redis_url) = self.config.redis_endpoint() {
+            info!("Initializing Redis connection to {}", redis_url);
+            let redis_stream_name = self.config.redis_stream_name();
+
+            match redis::Client::open(redis_url.as_str()) {
+                Ok(client) => {
+                    match redis::aio::ConnectionManager::new(client).await {
+                        Ok(connection_manager) => {
+                            info!("Redis connection established, using stream: {}", redis_stream_name);
+                            channel_manager.channel_manager_data.super_safe_lock(|data| {
+                                data.redis_client = Some(connection_manager);
+                                data.redis_stream_name = redis_stream_name;
+                            });
+                        }
+                        Err(e) => {
+                            warn!("Failed to create Redis connection manager: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to create Redis client: {}", e);
+                }
+            }
         }
 
         // Initialize default user assignment if configured

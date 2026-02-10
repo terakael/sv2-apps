@@ -105,8 +105,10 @@ pub struct ChannelManagerData {
     pub(crate) user_to_channel: HashMap<String, ChannelHandle>,
     // Channel to user mapping
     pub(crate) channel_to_user: HashMap<ChannelHandle, UserChannelMapping>,
-    // Webhook URL for share submissions
-    pub(crate) share_webhook_url: Option<String>,
+    // Redis connection manager for share submissions
+    pub(crate) redis_client: Option<redis::aio::ConnectionManager>,
+    // Redis stream name for share submissions
+    pub(crate) redis_stream_name: String,
     // Default user ID for auto-assignment
     pub(crate) default_user_id: Option<String>,
     // Default coinbase address for auto-assignment (from coinbase_reward_script)
@@ -249,7 +251,8 @@ impl ChannelManager {
             available_channels: VecDeque::new(),
             user_to_channel: HashMap::new(),
             channel_to_user: HashMap::new(),
-            share_webhook_url: None,
+            redis_client: None,
+            redis_stream_name: "shares".to_string(),
             default_user_id: None,
             default_coinbase_script: None,
             network: None, // Will be updated from config
@@ -923,10 +926,10 @@ impl ChannelManager {
         Ok(())
     }
 
-    /// Sends a webhook notification for a share submission.
+    /// Sends share data to Redis Stream.
     ///
-    /// Webhooks are sent asynchronously (fire-and-forget) to avoid blocking share processing.
-    pub async fn send_share_webhook(
+    /// Data is sent asynchronously (fire-and-forget) to avoid blocking share processing.
+    pub async fn send_share_to_redis(
         &self,
         user_id: String,
         job_id: u32,
@@ -936,8 +939,9 @@ impl ChannelManager {
         share_hash: Option<String>,
         is_block: bool,
     ) -> PoolResult<(), error::ChannelManager> {
-        let (webhook_url, coinbase_address, pool_tag, block_target) = self.channel_manager_data.super_safe_lock(|data| {
-            let webhook_url = data.share_webhook_url.clone();
+        let (redis_client, redis_stream_name, coinbase_address, pool_tag, block_target) = self.channel_manager_data.super_safe_lock(|data| {
+            let redis_client = data.redis_client.clone();
+            let redis_stream_name = data.redis_stream_name.clone();
             let network = data.network;
             let (coinbase_address, pool_tag) = data.user_to_channel
                 .get(&user_id)
@@ -964,63 +968,52 @@ impl ChannelManager {
                 Target::from_compact(compact).to_string()
             });
 
-            (webhook_url, coinbase_address, pool_tag, block_target)
+            (redis_client, redis_stream_name, coinbase_address, pool_tag, block_target)
         });
 
-        if webhook_url.is_none() {
-            info!("No webhook URL configured, skipping webhook for user {}", user_id);
+        if redis_client.is_none() {
+            info!("No Redis configured, skipping Redis publish for user {}", user_id);
             return Ok(());
         }
 
-        if let Some(url) = webhook_url {
-            info!("Sending webhook for user {} (job {}, is_block: {})",
+        if let Some(mut client) = redis_client {
+            info!("Sending share to Redis stream for user {} (job {}, is_block: {})",
                   user_id, job_id, is_block);
-            #[derive(serde::Serialize)]
-            struct ShareWebhookPayload {
-                user_id: String,
-                job_id: u32,
-                nonce: u32,
-                ntime: u32,
-                version: u32,
-                coinbase_address: String,
-                coinbase_prefix_tag: String,
-                share_hash: Option<String>,
-                is_block: bool,
-                block_target: Option<String>,
-                timestamp_secs: u64,
-            }
 
-            let payload = ShareWebhookPayload {
-                user_id: user_id.clone(),
-                job_id,
-                nonce,
-                ntime,
-                version,
-                coinbase_address,
-                coinbase_prefix_tag: pool_tag,
-                share_hash,
-                is_block,
-                block_target,
-                timestamp_secs: SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
-            };
+            let timestamp_secs = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
 
-            let client = reqwest::Client::new();
+            let user_id_clone = user_id.clone();
+            let stream_name = redis_stream_name.clone();
+
             tokio::spawn(async move {
-                match client.post(&url).json(&payload).send().await {
-                    Ok(response) if response.status().is_success() => {
-                        info!("✅ Webhook sent successfully for user {} (job {})",
-                              user_id, job_id);
-                    }
-                    Ok(response) => {
-                        warn!("❌ Webhook failed for user {}: status {} (url: {})",
-                              user_id, response.status(), url);
+                use redis::AsyncCommands;
+
+                // Build the fields for XADD
+                let fields: Vec<(&str, String)> = vec![
+                    ("user_id", user_id.clone()),
+                    ("job_id", job_id.to_string()),
+                    ("nonce", nonce.to_string()),
+                    ("ntime", ntime.to_string()),
+                    ("version", version.to_string()),
+                    ("coinbase_address", coinbase_address),
+                    ("coinbase_prefix_tag", pool_tag),
+                    ("share_hash", share_hash.unwrap_or_else(|| "".to_string())),
+                    ("is_block", is_block.to_string()),
+                    ("block_target", block_target.unwrap_or_else(|| "".to_string())),
+                    ("timestamp_secs", timestamp_secs.to_string()),
+                ];
+
+                match client.xadd::<_, _, _, _, String>(&stream_name, "*", &fields).await {
+                    Ok(id) => {
+                        info!("Share sent to Redis stream {} for user {} (job {}, stream_id: {})",
+                              stream_name, user_id_clone, job_id, id);
                     }
                     Err(e) => {
-                        warn!("❌ Webhook error for user {}: {} (url: {})",
-                              user_id, e, url);
+                        warn!("Failed to send share to Redis stream for user {}: {}",
+                              user_id_clone, e);
                     }
                 }
             });
