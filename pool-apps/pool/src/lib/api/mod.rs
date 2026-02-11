@@ -10,12 +10,18 @@ use stratum_apps::stratum_core::bitcoin::{script::ScriptBuf, Address};
 
 use crate::channel_manager::ChannelManager;
 
+fn default_max_shares() -> Option<u64> {
+    Some(50)
+}
+
 #[derive(Deserialize)]
 pub struct AssignUserRequest {
     pub user_id: String,
     pub coinbase_address: String,
     #[serde(default)]
     pub coinbase_prefix_tag: Option<String>,
+    #[serde(default = "default_max_shares")]
+    pub max_shares: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -59,7 +65,7 @@ async fn assign_user_handler(
         .unwrap_or_else(|| req.user_id.clone());
 
     match channel_manager
-        .assign_user(req.user_id.clone(), script_pubkey, tag)
+        .assign_user(req.user_id.clone(), script_pubkey, tag, req.max_shares)
         .await
     {
         Ok(handle) => (

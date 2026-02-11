@@ -74,6 +74,7 @@ pub struct UserChannelMapping {
     pub coinbase_address: ScriptBuf,
     pub coinbase_prefix_tag: String,
     pub assigned_at: SystemTime,
+    pub remaining_shares: Option<u64>,
 }
 
 pub struct ChannelManagerData {
@@ -159,6 +160,7 @@ impl ChannelManagerData {
                     handle,
                     default_coinbase_script.clone(),
                     default_user_id.clone(), // Use user_id as the tag
+                    None, // No share limit for default house address
                 );
             }
         }
@@ -183,6 +185,7 @@ impl ChannelManagerData {
         handle: ChannelHandle,
         coinbase_address: ScriptBuf,
         coinbase_prefix_tag: String,
+        remaining_shares: Option<u64>,
     ) {
         if let Some(old_handle) = self.user_to_channel.remove(&user_id) {
             self.channel_to_user.remove(&old_handle);
@@ -193,6 +196,7 @@ impl ChannelManagerData {
             coinbase_address,
             coinbase_prefix_tag,
             assigned_at: SystemTime::now(),
+            remaining_shares,
         };
 
         self.user_to_channel.insert(user_id, handle.clone());
@@ -821,6 +825,9 @@ impl ChannelManager {
     /// 2. Stores the user → channel assignment
     /// 3. Updates both active and future jobs with the new coinbase address
     ///
+    /// # Parameters
+    /// - `remaining_shares`: Optional number of shares before reverting to house address
+    ///
     /// # Returns
     /// The `ChannelHandle` assigned to the user
     pub async fn assign_user(
@@ -828,6 +835,7 @@ impl ChannelManager {
         user_id: String,
         coinbase_address: ScriptBuf,
         coinbase_prefix_tag: String,
+        remaining_shares: Option<u64>,
     ) -> PoolResult<ChannelHandle, error::ChannelManager> {
         // Get next available channel
         let handle = self
@@ -845,6 +853,7 @@ impl ChannelManager {
                 handle.clone(),
                 coinbase_address.clone(),
                 coinbase_prefix_tag.clone(),
+                remaining_shares,
             );
         });
 

@@ -731,7 +731,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
         if let Some(user_id) = user_id {
             info!("Attempting to send share to Redis for user {}", user_id);
             if let Err(e) = self.send_share_to_redis(
-                user_id,
+                user_id.clone(),
                 msg.job_id,
                 msg.nonce,
                 msg.ntime,
@@ -740,6 +740,50 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                 is_block,
             ).await {
                 warn!("Failed to send share to Redis: {:?}", e);
+            }
+
+            // Check if we need to decrement remaining_shares and potentially switch back to house address
+            let should_revert = self.channel_manager_data.super_safe_lock(|data| {
+                if let Some(mapping) = data.channel_to_user.get_mut(&handle) {
+                    if let Some(remaining) = mapping.remaining_shares.as_mut() {
+                        if *remaining > 0 {
+                            *remaining -= 1;
+                            info!("User {} has {} shares remaining", user_id, *remaining);
+
+                            if *remaining == 0 {
+                                info!("User {} has exhausted their share quota, reverting to house address", user_id);
+                                return true;
+                            }
+                        }
+                    }
+                }
+                false
+            });
+
+            // If shares are exhausted, switch back to house address
+            if should_revert {
+                if let (Some(default_user_id), Some(default_coinbase_script)) =
+                    self.channel_manager_data.super_safe_lock(|data|
+                        (data.default_user_id.clone(), data.default_coinbase_script.clone())
+                    ) {
+                    info!("Switching channel {}_{} back to house address", handle.downstream_id, handle.channel_id);
+
+                    // Update the mapping to house address
+                    self.channel_manager_data.super_safe_lock(|data| {
+                        data.assign_user_to_channel(
+                            default_user_id.clone(),
+                            handle.clone(),
+                            default_coinbase_script.clone(),
+                            default_user_id.clone(),
+                            None, // No share limit for house address
+                        );
+                    });
+
+                    // Switch coinbase for this channel
+                    if let Err(e) = self.switch_channel_coinbase(handle, default_coinbase_script).await {
+                        warn!("Failed to switch back to house address: {:?}", e);
+                    }
+                }
             }
         } else {
             info!("No user assigned to channel, skipping Redis publish");
