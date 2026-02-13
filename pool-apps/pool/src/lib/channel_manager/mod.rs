@@ -861,6 +861,9 @@ impl ChannelManager {
         self.switch_channel_coinbase(handle.clone(), coinbase_address)
             .await?;
 
+        // Update miner tag with coinbase_prefix_tag
+        self.update_channel_miner_tag(handle.clone(), Some(coinbase_prefix_tag))?;
+
         Ok(handle)
     }
 
@@ -933,6 +936,33 @@ impl ChannelManager {
         }
 
         Ok(())
+    }
+
+    /// Updates the miner tag for a specific channel's group channel.
+    ///
+    /// This allows dynamic modification of the miner tag that appears in the coinbase scriptSig.
+    fn update_channel_miner_tag(
+        &self,
+        handle: ChannelHandle,
+        miner_tag: Option<String>,
+    ) -> PoolResult<(), error::ChannelManager> {
+        self.channel_manager_data.super_safe_lock(|data| {
+            let downstream = data
+                .downstream
+                .get_mut(&handle.downstream_id)
+                .ok_or_else(|| {
+                    PoolError::shutdown(PoolErrorKind::DownstreamNotFound(handle.downstream_id))
+                })?;
+
+            downstream.downstream_data.super_safe_lock(|dd| {
+                dd.group_channel
+                    .set_miner_tag(miner_tag)
+                    .map_err(|e| {
+                        error!("Failed to set miner tag: {:?}", e);
+                        PoolError::shutdown(PoolErrorKind::CouldNotInitiateSystem)
+                    })
+            })
+        })
     }
 
     /// Sends share data to Redis Stream.
