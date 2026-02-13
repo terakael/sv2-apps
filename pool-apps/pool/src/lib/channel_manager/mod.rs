@@ -857,12 +857,12 @@ impl ChannelManager {
             );
         });
 
-        // Switch coinbase for this channel
+        // Update miner tag BEFORE switching coinbase so new jobs have the updated tag
+        self.update_channel_miner_tag(handle.clone(), Some(coinbase_prefix_tag))?;
+
+        // Switch coinbase for this channel (creates new jobs with updated miner tag)
         self.switch_channel_coinbase(handle.clone(), coinbase_address)
             .await?;
-
-        // Update miner tag with coinbase_prefix_tag
-        self.update_channel_miner_tag(handle.clone(), Some(coinbase_prefix_tag))?;
 
         Ok(handle)
     }
@@ -955,12 +955,25 @@ impl ChannelManager {
                 })?;
 
             downstream.downstream_data.super_safe_lock(|dd| {
+                // Update the group channel's miner tag
                 dd.group_channel
-                    .set_miner_tag(miner_tag)
+                    .set_miner_tag(miner_tag.clone())
                     .map_err(|e| {
-                        error!("Failed to set miner tag: {:?}", e);
+                        error!("Failed to set group channel miner tag: {:?}", e);
                         PoolError::shutdown(PoolErrorKind::CouldNotInitiateSystem)
-                    })
+                    })?;
+
+                // Update the standard channel's miner tag if it exists
+                if let Some(channel) = dd.standard_channels.get_mut(&handle.channel_id) {
+                    channel
+                        .set_miner_tag(miner_tag)
+                        .map_err(|e| {
+                            error!("Failed to set standard channel miner tag: {:?}", e);
+                            PoolError::shutdown(PoolErrorKind::CouldNotInitiateSystem)
+                        })?;
+                }
+
+                Ok(())
             })
         })
     }
