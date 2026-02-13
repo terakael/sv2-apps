@@ -288,7 +288,7 @@ checksum = "32637268377fc7b10a8c6d51de3e7fba1ce5dd371a96e342b34e6078db558e7f"
 [[package]]
 name = "binary_sv2"
 version = "5.0.1"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "buffer_sv2",
  "derive_codec_sv2",
@@ -434,7 +434,7 @@ dependencies = [
 [[package]]
 name = "buffer_sv2"
 version = "3.0.1"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "aes-gcm",
 ]
@@ -546,7 +546,7 @@ dependencies = [
 [[package]]
 name = "channels_sv2"
 version = "3.0.1"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "binary_sv2",
  "bitcoin",
@@ -616,7 +616,7 @@ checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
 [[package]]
 name = "codec_sv2"
 version = "4.0.1"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "binary_sv2",
  "buffer_sv2",
@@ -658,7 +658,7 @@ dependencies = [
 [[package]]
 name = "common_messages_sv2"
 version = "7.0.0"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "binary_sv2",
 ]
@@ -828,7 +828,7 @@ dependencies = [
 [[package]]
 name = "derive_codec_sv2"
 version = "1.1.2"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 
 [[package]]
 name = "digest"
@@ -963,7 +963,7 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 [[package]]
 name = "extensions_sv2"
 version = "0.1.0"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "binary_sv2",
 ]
@@ -1051,7 +1051,7 @@ dependencies = [
 [[package]]
 name = "framing_sv2"
 version = "6.0.1"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "binary_sv2",
  "buffer_sv2",
@@ -1219,7 +1219,7 @@ dependencies = [
 [[package]]
 name = "handlers_sv2"
 version = "0.2.2"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "binary_sv2",
  "common_messages_sv2",
@@ -1691,7 +1691,7 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 [[package]]
 name = "job_declaration_sv2"
 version = "6.0.0"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "binary_sv2",
 ]
@@ -1824,7 +1824,7 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "mining_sv2"
 version = "7.0.0"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "binary_sv2",
 ]
@@ -1881,7 +1881,7 @@ dependencies = [
 [[package]]
 name = "noise_sv2"
 version = "1.4.2"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "aes-gcm",
  "chacha20poly1305",
@@ -2068,7 +2068,7 @@ dependencies = [
 [[package]]
 name = "parsers_sv2"
 version = "0.2.2"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "binary_sv2",
  "common_messages_sv2",
@@ -2935,7 +2935,7 @@ dependencies = [
 [[package]]
 name = "stratum-core"
 version = "0.2.1"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "binary_sv2",
  "bitcoin",
@@ -3039,7 +3039,7 @@ dependencies = [
 [[package]]
 name = "template_distribution_sv2"
 version = "5.0.0"
-source = "git+ssh://git@github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "binary_sv2",
 ]
