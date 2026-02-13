@@ -4,7 +4,7 @@
 FROM rust:1.85-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    capnproto libcapnp-dev curl && \
+    capnproto libcapnp-dev curl pkg-config && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
