@@ -1095,13 +1095,44 @@ impl ChannelManager {
             output: vec![],
         };
 
-        // Coinbase input
+        // Get pool signature and miner tag for scriptSig construction
+        let (pool_signature, miner_tag) = self.channel_manager_data.super_safe_lock(|data| {
+            let miner_tag = data.user_to_channel
+                .get(&user_id)
+                .and_then(|handle| data.channel_to_user.get(handle))
+                .map(|mapping| mapping.coinbase_prefix_tag.clone())
+                .unwrap_or_default();
+            (self.pool_tag_string.clone(), miner_tag)
+        });
+
+        // Coinbase input with pool signature in scriptSig
         let coinbase_script = {
             let mut script_bytes = Vec::new();
+
             // Add coinbase prefix (contains BIP34 height)
             script_bytes.extend_from_slice(template.coinbase_prefix.inner_as_ref());
+
+            // Add pool signature tag: /pool_signature/miner_tag//
+            let tag_string = if miner_tag.is_empty() {
+                format!("/{}//", pool_signature)
+            } else {
+                format!("/{}/{}//", pool_signature, miner_tag)
+            };
+            let tag_bytes = tag_string.as_bytes();
+
+            // Add OP_PUSHBYTES for the tag
+            if tag_bytes.len() <= 75 {
+                script_bytes.push(tag_bytes.len() as u8);
+                script_bytes.extend_from_slice(tag_bytes);
+            }
+
+            // Add OP_PUSHBYTES for extranonce
+            if extranonce_prefix.len() <= 75 {
+                script_bytes.push(extranonce_prefix.len() as u8);
+            }
             // Add extranonce
             script_bytes.extend_from_slice(extranonce_prefix);
+
             ScriptBuf::from_bytes(script_bytes)
         };
 
