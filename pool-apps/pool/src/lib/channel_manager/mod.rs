@@ -1106,8 +1106,13 @@ impl ChannelManager {
                     use stratum_apps::stratum_core::bitcoin::{CompactTarget, Target};
                     let compact = CompactTarget::from_consensus(prev_hash.n_bits);
                     let target = Target::from_compact(compact).to_string();
-                    let prev_hash_hex = hex::encode(prev_hash.prev_hash.inner_as_ref());
-                    let bits = format!("{:#x}", prev_hash.n_bits);
+                    // Reverse bytes to display format (big-endian) for block explorer compatibility
+                    // Bitcoin block hashes are displayed in reverse byte order from their internal format
+                    let mut prev_hash_bytes = prev_hash.prev_hash.inner_as_ref().to_vec();
+                    prev_hash_bytes.reverse();
+                    let prev_hash_hex = hex::encode(prev_hash_bytes);
+                    // Format bits without 0x prefix for consistency with other hex fields
+                    let bits = format!("{:x}", prev_hash.n_bits);
                     (Some(target), prev_hash_hex, bits)
                 })
                 .unwrap_or_else(|| (None, String::new(), String::new()));
