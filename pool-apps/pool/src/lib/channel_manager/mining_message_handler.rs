@@ -573,7 +573,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
             info!("Share from unassigned channel {}_{}", downstream_id, msg.channel_id);
         }
 
-        let (messages, share_hash, is_block) = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
+        let (messages, share_hash, is_block, job) = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
             let channel_id = msg.channel_id;
 
             let Some(downstream) = channel_manager_data.downstream.get(&downstream_id) else {
@@ -594,11 +594,11 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                             .expect("error code must be valid string"),
                     };
                     error!("SubmitSharesError: downstream_id: {}, channel_id: {}, sequence_number: {}, error_code: invalid-channel-id ❌", downstream_id, channel_id, msg.sequence_number);
-                    return Ok((vec![(downstream_id, Mining::SubmitSharesError(submit_shares_error)).into()], None, false));
+                    return Ok((vec![(downstream_id, Mining::SubmitSharesError(submit_shares_error)).into()], None, false, None));
                 };
 
                 let Some(vardiff) = channel_manager_data.vardiff.get_mut(&(downstream_id, channel_id).into()) else {
-                    return Ok((vec![(downstream_id, Mining::CloseChannel(create_close_channel_msg(channel_id, "invalid-channel-id"))).into()], None, false));
+                    return Ok((vec![(downstream_id, Mining::CloseChannel(create_close_channel_msg(channel_id, "invalid-channel-id"))).into()], None, false, None));
                 };
 
                 let res = standard_channel.validate_share(msg.clone());
@@ -719,7 +719,13 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                     }
                 }
 
-                Ok((messages, share_hash, is_block))
+                // Get the job for Redis data extraction
+                // Try to get from active job first, then from past jobs
+                let job = standard_channel.get_active_job()
+                    .filter(|j| j.get_job_id() == msg.job_id)
+                    .or_else(|| standard_channel.get_past_job(msg.job_id));
+
+                Ok((messages, share_hash, is_block, job))
             })
         })?;
 
@@ -729,17 +735,22 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
 
         // Send share to Redis if user is assigned
         if let Some(user_id) = user_id {
-            info!("Attempting to send share to Redis for user {}", user_id);
-            if let Err(e) = self.send_share_to_redis(
-                user_id.clone(),
-                msg.job_id,
-                msg.nonce,
-                msg.ntime,
-                msg.version,
-                share_hash,
-                is_block,
-            ).await {
-                warn!("Failed to send share to Redis: {:?}", e);
+            if let Some(job) = job {
+                info!("Attempting to send share to Redis for user {}", user_id);
+                if let Err(e) = self.send_share_to_redis(
+                    user_id.clone(),
+                    msg.job_id,
+                    msg.nonce,
+                    msg.ntime,
+                    msg.version,
+                    share_hash,
+                    is_block,
+                    &job,
+                ).await {
+                    warn!("Failed to send share to Redis: {:?}", e);
+                }
+            } else {
+                warn!("Could not retrieve job {} for Redis publish", msg.job_id);
             }
 
             // Check if we need to decrement remaining_shares and potentially switch back to house address

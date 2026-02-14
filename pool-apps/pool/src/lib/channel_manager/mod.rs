@@ -978,9 +978,63 @@ impl ChannelManager {
         })
     }
 
+    /// Helper function to decode BIP34 block height from coinbase prefix.
+    ///
+    /// BIP34 requires the block height to be encoded at the start of the coinbase scriptSig.
+    /// Format: [length_byte] [height_bytes_little_endian]
+    fn decode_block_height(coinbase_prefix: &[u8]) -> Result<u64, &'static str> {
+        if coinbase_prefix.is_empty() {
+            return Err("Empty coinbase prefix");
+        }
+
+        let len = coinbase_prefix[0] as usize;
+        if coinbase_prefix.len() < len + 1 {
+            return Err("Coinbase prefix too short for declared length");
+        }
+
+        if len == 0 || len > 8 {
+            return Err("Invalid BIP34 height length");
+        }
+
+        let mut height = 0u64;
+        for i in 0..len {
+            height |= (coinbase_prefix[i + 1] as u64) << (i * 8);
+        }
+
+        Ok(height)
+    }
+
+    /// Helper function to extract witness commitment from coinbase transaction outputs.
+    ///
+    /// Witness commitment is stored in an OP_RETURN output with format:
+    /// OP_RETURN 0x24 0xaa21a9ed <32-byte-commitment>
+    fn extract_witness_commitment(outputs: &[TxOut]) -> Option<String> {
+        for output in outputs {
+            let script = output.script_pubkey.as_bytes();
+
+            // Check for witness commitment pattern:
+            // 0x6a (OP_RETURN) + 0x24 (36 bytes) + 0xaa21a9ed (witness header) + 32 bytes
+            if script.len() == 38
+                && script[0] == 0x6a  // OP_RETURN
+                && script[1] == 0x24  // 36 bytes
+                && script[2..6] == [0xaa, 0x21, 0xa9, 0xed]  // Witness commitment header
+            {
+                return Some(hex::encode(&script[6..38]));
+            }
+        }
+
+        None
+    }
+
     /// Sends share data to Redis Stream.
     ///
     /// Data is sent asynchronously (fire-and-forget) to avoid blocking share processing.
+    ///
+    /// Includes all necessary data for client-side hash verification:
+    /// - Block header fields (version, prev_hash, timestamp, bits, nonce)
+    /// - Coinbase transaction data (address, value, extranonce, tags, witness commitment)
+    /// - Merkle path for merkle root calculation
+    /// - Block height for BIP34 compliance
     pub async fn send_share_to_redis(
         &self,
         user_id: String,
@@ -990,8 +1044,41 @@ impl ChannelManager {
         version: u32,
         share_hash: Option<String>,
         is_block: bool,
+        job: &StandardJob<'_>,
     ) -> PoolResult<(), error::ChannelManager> {
-        let (redis_client, redis_stream_name, coinbase_address, pool_tag, block_target) = self.channel_manager_data.super_safe_lock(|data| {
+        // Extract job template data for hash verification
+        let template = job.get_template();
+        let extranonce_prefix = job.get_extranonce_prefix();
+        let coinbase_outputs = job.get_coinbase_outputs();
+
+        // Extract merkle path from template and format as JSON array
+        let merkle_path_vec: Vec<String> = template
+            .merkle_path
+            .inner_as_ref()
+            .iter()
+            .map(|hash| format!("\"{}\"", hex::encode(hash)))
+            .collect();
+        let merkle_path_json = format!("[{}]", merkle_path_vec.join(","));
+
+        // Decode block height from coinbase prefix (BIP34)
+        let block_height = Self::decode_block_height(template.coinbase_prefix.inner_as_ref())
+            .map(|h| h.to_string())
+            .unwrap_or_else(|e| {
+                warn!("Failed to decode block height: {}", e);
+                "0".to_string()
+            });
+
+        // Extract witness commitment from coinbase outputs
+        let witness_commitment =
+            Self::extract_witness_commitment(coinbase_outputs).unwrap_or_default();
+
+        // Encode extranonce as hex
+        let extranonce_hex = hex::encode(extranonce_prefix);
+
+        // Get coinbase value from template
+        let coinbase_value = template.coinbase_tx_value_remaining.to_string();
+
+        let (redis_client, redis_stream_name, coinbase_address, pool_tag, block_target, prev_block_hash_hex, bits_hex) = self.channel_manager_data.super_safe_lock(|data| {
             let redis_client = data.redis_client.clone();
             let redis_stream_name = data.redis_stream_name.clone();
             let network = data.network;
@@ -1013,14 +1100,19 @@ impl ChannelManager {
                 })
                 .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
 
-            // Get block target from last new prev hash (n_bits in compact form)
-            let block_target = data.last_new_prev_hash.as_ref().map(|prev_hash| {
-                use stratum_apps::stratum_core::bitcoin::{CompactTarget, Target};
-                let compact = CompactTarget::from_consensus(prev_hash.n_bits);
-                Target::from_compact(compact).to_string()
-            });
+            // Get block data from last new prev hash
+            let (block_target, prev_block_hash_hex, bits_hex) = data.last_new_prev_hash.as_ref()
+                .map(|prev_hash| {
+                    use stratum_apps::stratum_core::bitcoin::{CompactTarget, Target};
+                    let compact = CompactTarget::from_consensus(prev_hash.n_bits);
+                    let target = Target::from_compact(compact).to_string();
+                    let prev_hash_hex = hex::encode(prev_hash.prev_hash.inner_as_ref());
+                    let bits = format!("{:#x}", prev_hash.n_bits);
+                    (Some(target), prev_hash_hex, bits)
+                })
+                .unwrap_or_else(|| (None, String::new(), String::new()));
 
-            (redis_client, redis_stream_name, coinbase_address, pool_tag, block_target)
+            (redis_client, redis_stream_name, coinbase_address, pool_tag, block_target, prev_block_hash_hex, bits_hex)
         });
 
         if redis_client.is_none() {
@@ -1043,8 +1135,9 @@ impl ChannelManager {
             tokio::spawn(async move {
                 use redis::AsyncCommands;
 
-                // Build the fields for XADD
+                // Build the fields for XADD - includes all data needed for client-side hash verification
                 let fields: Vec<(&str, String)> = vec![
+                    // Original fields
                     ("user_id", user_id.clone()),
                     ("job_id", job_id.to_string()),
                     ("nonce", nonce.to_string()),
@@ -1056,6 +1149,14 @@ impl ChannelManager {
                     ("is_block", is_block.to_string()),
                     ("block_target", block_target.unwrap_or_else(|| "".to_string())),
                     ("timestamp_secs", timestamp_secs.to_string()),
+                    // New fields for hash verification
+                    ("prev_block_hash", prev_block_hash_hex),
+                    ("bits", bits_hex),
+                    ("merkle_path", merkle_path_json),
+                    ("block_height", block_height),
+                    ("extranonce", extranonce_hex),
+                    ("coinbase_value", coinbase_value),
+                    ("witness_commitment", witness_commitment),
                 ];
 
                 match client.xadd::<_, _, _, _, String>(&stream_name, "*", &fields).await {
