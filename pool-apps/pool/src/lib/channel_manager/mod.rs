@@ -1087,9 +1087,9 @@ impl ChannelManager {
             ScriptBuf, Witness,
         };
 
-        // Build the coinbase transaction
+        // Build the coinbase transaction (matching JobFactory::coinbase)
         let mut coinbase_tx = BitcoinTransaction {
-            version: Version(template.coinbase_tx_version as i32),
+            version: Version::non_standard(template.coinbase_tx_version as i32),
             lock_time: LockTime::from_consensus(template.coinbase_tx_locktime),
             input: vec![],
             output: vec![],
@@ -1140,7 +1140,8 @@ impl ChannelManager {
             previous_output: OutPoint::null(),
             script_sig: coinbase_script,
             sequence: Sequence(template.coinbase_tx_input_sequence),
-            witness: Witness::new(),
+            // 32 bytes of zeros witness (matches JobFactory::coinbase)
+            witness: Witness::from(vec![vec![0u8; 32]]),
         });
 
         // Add outputs from template
