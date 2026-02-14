@@ -1078,6 +1078,50 @@ impl ChannelManager {
         // Get coinbase value from template
         let coinbase_value = template.coinbase_tx_value_remaining.to_string();
 
+        // Construct full coinbase transaction for hash verification
+        // This allows clients to independently verify the hash
+        use stratum_apps::stratum_core::bitcoin::{
+            consensus::Encodable,
+            transaction::{Transaction as BitcoinTransaction, TxIn, OutPoint, Sequence, Version},
+            blockdata::locktime::absolute::LockTime,
+            ScriptBuf, Witness,
+        };
+
+        // Build the coinbase transaction
+        let mut coinbase_tx = BitcoinTransaction {
+            version: Version(template.coinbase_tx_version as i32),
+            lock_time: LockTime::from_consensus(template.coinbase_tx_locktime),
+            input: vec![],
+            output: vec![],
+        };
+
+        // Coinbase input
+        let coinbase_script = {
+            let mut script_bytes = Vec::new();
+            // Add coinbase prefix (contains BIP34 height)
+            script_bytes.extend_from_slice(template.coinbase_prefix.inner_as_ref());
+            // Add extranonce
+            script_bytes.extend_from_slice(extranonce_prefix);
+            ScriptBuf::from_bytes(script_bytes)
+        };
+
+        coinbase_tx.input.push(TxIn {
+            previous_output: OutPoint::null(),
+            script_sig: coinbase_script,
+            sequence: Sequence(template.coinbase_tx_input_sequence),
+            witness: Witness::new(),
+        });
+
+        // Add outputs from template
+        coinbase_tx.output = coinbase_outputs.clone();
+
+        // Serialize the full coinbase transaction
+        let mut coinbase_tx_bytes = Vec::new();
+        if let Err(e) = coinbase_tx.consensus_encode(&mut coinbase_tx_bytes) {
+            warn!("Failed to serialize coinbase transaction: {}", e);
+        }
+        let coinbase_tx_hex = hex::encode(&coinbase_tx_bytes);
+
         let (redis_client, redis_stream_name, coinbase_address, pool_tag, block_target, prev_block_hash_hex, bits_hex) = self.channel_manager_data.super_safe_lock(|data| {
             let redis_client = data.redis_client.clone();
             let redis_stream_name = data.redis_stream_name.clone();
@@ -1162,6 +1206,8 @@ impl ChannelManager {
                     ("extranonce", extranonce_hex),
                     ("coinbase_value", coinbase_value),
                     ("witness_commitment", witness_commitment),
+                    // Full serialized coinbase transaction for exact hash verification
+                    ("coinbase_tx", coinbase_tx_hex),
                 ];
 
                 match client.xadd::<_, _, _, _, String>(&stream_name, "*", &fields).await {
