@@ -733,21 +733,26 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
             message.forward(&self.channel_manager_channel).await;
         }
 
-        // Send share to Redis if user is assigned
+        // Send share to Redis if user is assigned and share is valid
         if let Some(user_id) = user_id {
             if let Some(job) = job {
-                info!("Attempting to send share to Redis for user {}", user_id);
-                if let Err(e) = self.send_share_to_redis(
-                    user_id.clone(),
-                    msg.job_id,
-                    msg.nonce,
-                    msg.ntime,
-                    msg.version,
-                    share_hash,
-                    is_block,
-                    &job,
-                ).await {
-                    warn!("Failed to send share to Redis: {:?}", e);
+                // Only send to Redis if share validation was successful (share_hash is Some)
+                if let Some(hash) = share_hash {
+                    info!("Attempting to send share to Redis for user {}", user_id);
+                    if let Err(e) = self.send_share_to_redis(
+                        user_id.clone(),
+                        msg.job_id,
+                        msg.nonce,
+                        msg.ntime,
+                        msg.version,
+                        Some(hash),
+                        is_block,
+                        &job,
+                    ).await {
+                        warn!("Failed to send share to Redis: {:?}", e);
+                    }
+                } else {
+                    info!("Skipping Redis publish for user {} - share validation failed", user_id);
                 }
             } else {
                 warn!("Could not retrieve job {} for Redis publish", msg.job_id);
