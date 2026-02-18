@@ -1085,11 +1085,11 @@ impl ChannelManager {
             // Add coinbase prefix (contains BIP34 height)
             script_bytes.extend_from_slice(template.coinbase_prefix.inner_as_ref());
 
-            // Add pool signature tag: /pool_signature/miner_tag//
+            // Add pool signature tag: /pool_signature/miner_tag/
             let tag_string = if miner_tag.is_empty() {
                 format!("/{}//", pool_signature)
             } else {
-                format!("/{}/{}//", pool_signature, miner_tag)
+                format!("/{}/{}/", pool_signature, miner_tag)
             };
             let tag_bytes = tag_string.as_bytes();
 
