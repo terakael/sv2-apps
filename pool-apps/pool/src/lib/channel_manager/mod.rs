@@ -5,7 +5,7 @@ use std::{
         atomic::{AtomicU32, AtomicUsize},
         Arc,
     },
-    time::{SystemTime, UNIX_EPOCH},
+    time::SystemTime,
 };
 
 use async_channel::{Receiver, Sender};
@@ -1008,33 +1008,16 @@ impl ChannelManager {
     ///
     /// Witness commitment is stored in an OP_RETURN output with format:
     /// OP_RETURN 0x24 0xaa21a9ed <32-byte-commitment>
-    fn extract_witness_commitment(outputs: &[TxOut]) -> Option<String> {
-        for output in outputs {
-            let script = output.script_pubkey.as_bytes();
-
-            // Check for witness commitment pattern:
-            // 0x6a (OP_RETURN) + 0x24 (36 bytes) + 0xaa21a9ed (witness header) + 32 bytes
-            if script.len() == 38
-                && script[0] == 0x6a  // OP_RETURN
-                && script[1] == 0x24  // 36 bytes
-                && script[2..6] == [0xaa, 0x21, 0xa9, 0xed]  // Witness commitment header
-            {
-                return Some(hex::encode(&script[6..38]));
-            }
-        }
-
-        None
-    }
-
     /// Sends share data to Redis Stream.
     ///
     /// Data is sent asynchronously (fire-and-forget) to avoid blocking share processing.
     ///
-    /// Includes all necessary data for client-side hash verification:
-    /// - Block header fields (version, prev_hash, timestamp, bits, nonce)
-    /// - Coinbase transaction data (address, value, extranonce, tags, witness commitment)
-    /// - Merkle path for merkle root calculation
-    /// - Block height for BIP34 compliance
+    /// Includes minimal data required for client-side share hash verification:
+    /// - Essential (8 fields): share_hash, coinbase_tx, prev_block_hash, bits, nonce, ntime, version, merkle_path
+    /// - Optional metadata (4 fields): user_id, coinbase_address, coinbase_prefix_tag, block_height
+    ///
+    /// The coinbase_tx contains all necessary data (address, value, extranonce, tags, witness commitment)
+    /// allowing clients to verify their address and miner tag are in the transaction.
     pub async fn send_share_to_redis(
         &self,
         user_id: String,
@@ -1043,7 +1026,7 @@ impl ChannelManager {
         ntime: u32,
         version: u32,
         share_hash: Option<String>,
-        is_block: bool,
+        _is_block: bool,
         job: &StandardJob<'_>,
     ) -> PoolResult<(), error::ChannelManager> {
         // Extract job template data for hash verification
@@ -1067,16 +1050,6 @@ impl ChannelManager {
                 warn!("Failed to decode block height: {}", e);
                 "0".to_string()
             });
-
-        // Extract witness commitment from coinbase outputs
-        let witness_commitment =
-            Self::extract_witness_commitment(coinbase_outputs).unwrap_or_default();
-
-        // Encode extranonce as hex
-        let extranonce_hex = hex::encode(extranonce_prefix);
-
-        // Get coinbase value from template
-        let coinbase_value = template.coinbase_tx_value_remaining.to_string();
 
         // Construct full coinbase transaction for hash verification
         // This allows clients to independently verify the hash
@@ -1154,7 +1127,7 @@ impl ChannelManager {
         }
         let coinbase_tx_hex = hex::encode(&coinbase_tx_bytes);
 
-        let (redis_client, redis_stream_name, coinbase_address, pool_tag, block_target, prev_block_hash_hex, bits_hex) = self.channel_manager_data.super_safe_lock(|data| {
+        let (redis_client, redis_stream_name, coinbase_address, pool_tag, prev_block_hash_hex, bits_hex) = self.channel_manager_data.super_safe_lock(|data| {
             let redis_client = data.redis_client.clone();
             let redis_stream_name = data.redis_stream_name.clone();
             let network = data.network;
@@ -1177,11 +1150,8 @@ impl ChannelManager {
                 .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
 
             // Get block data from last new prev hash
-            let (block_target, prev_block_hash_hex, bits_hex) = data.last_new_prev_hash.as_ref()
+            let (prev_block_hash_hex, bits_hex) = data.last_new_prev_hash.as_ref()
                 .map(|prev_hash| {
-                    use stratum_apps::stratum_core::bitcoin::{CompactTarget, Target};
-                    let compact = CompactTarget::from_consensus(prev_hash.n_bits);
-                    let target = Target::from_compact(compact).to_string();
                     // Reverse bytes to display format (big-endian) for block explorer compatibility
                     // Bitcoin block hashes are displayed in reverse byte order from their internal format
                     let mut prev_hash_bytes = prev_hash.prev_hash.inner_as_ref().to_vec();
@@ -1189,11 +1159,11 @@ impl ChannelManager {
                     let prev_hash_hex = hex::encode(prev_hash_bytes);
                     // Format bits without 0x prefix for consistency with other hex fields
                     let bits = format!("{:x}", prev_hash.n_bits);
-                    (Some(target), prev_hash_hex, bits)
+                    (prev_hash_hex, bits)
                 })
-                .unwrap_or_else(|| (None, String::new(), String::new()));
+                .unwrap_or_else(|| (String::new(), String::new()));
 
-            (redis_client, redis_stream_name, coinbase_address, pool_tag, block_target, prev_block_hash_hex, bits_hex)
+            (redis_client, redis_stream_name, coinbase_address, pool_tag, prev_block_hash_hex, bits_hex)
         });
 
         if redis_client.is_none() {
@@ -1202,13 +1172,8 @@ impl ChannelManager {
         }
 
         if let Some(mut client) = redis_client {
-            info!("Sending share to Redis stream for user {} (job {}, is_block: {})",
-                  user_id, job_id, is_block);
-
-            let timestamp_secs = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
+            info!("Sending share to Redis stream for user {} (job {})",
+                  user_id, job_id);
 
             let user_id_clone = user_id.clone();
             let stream_name = redis_stream_name.clone();
@@ -1216,30 +1181,25 @@ impl ChannelManager {
             tokio::spawn(async move {
                 use redis::AsyncCommands;
 
-                // Build the fields for XADD - includes all data needed for client-side hash verification
+                // Build the fields for XADD - minimal data required for client-side hash verification
+                // Essential fields (8): share_hash, coinbase_tx, prev_block_hash, bits, nonce, ntime, version, merkle_path
+                // Optional metadata (3): user_id, coinbase_address, block_height
                 let fields: Vec<(&str, String)> = vec![
-                    // Original fields
-                    ("user_id", user_id.clone()),
-                    ("job_id", job_id.to_string()),
+                    // Required for verification
+                    ("share_hash", share_hash.unwrap_or_else(|| "".to_string())),
+                    ("coinbase_tx", coinbase_tx_hex),
+                    ("prev_block_hash", prev_block_hash_hex),
+                    ("bits", bits_hex),
                     ("nonce", nonce.to_string()),
                     ("ntime", ntime.to_string()),
                     ("version", version.to_string()),
+                    ("merkle_path", merkle_path_json),
+
+                    // Optional metadata
+                    ("user_id", user_id.clone()),
                     ("coinbase_address", coinbase_address),
                     ("coinbase_prefix_tag", pool_tag),
-                    ("share_hash", share_hash.unwrap_or_else(|| "".to_string())),
-                    ("is_block", is_block.to_string()),
-                    ("block_target", block_target.unwrap_or_else(|| "".to_string())),
-                    ("timestamp_secs", timestamp_secs.to_string()),
-                    // New fields for hash verification
-                    ("prev_block_hash", prev_block_hash_hex),
-                    ("bits", bits_hex),
-                    ("merkle_path", merkle_path_json),
                     ("block_height", block_height),
-                    ("extranonce", extranonce_hex),
-                    ("coinbase_value", coinbase_value),
-                    ("witness_commitment", witness_commitment),
-                    // Full serialized coinbase transaction for exact hash verification
-                    ("coinbase_tx", coinbase_tx_hex),
                 ];
 
                 match client.xadd::<_, _, _, _, String>(&stream_name, "*", &fields).await {
