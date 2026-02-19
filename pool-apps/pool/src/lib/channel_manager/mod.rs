@@ -978,46 +978,16 @@ impl ChannelManager {
         })
     }
 
-    /// Helper function to decode BIP34 block height from coinbase prefix.
-    ///
-    /// BIP34 requires the block height to be encoded at the start of the coinbase scriptSig.
-    /// Format: [length_byte] [height_bytes_little_endian]
-    fn decode_block_height(coinbase_prefix: &[u8]) -> Result<u64, &'static str> {
-        if coinbase_prefix.is_empty() {
-            return Err("Empty coinbase prefix");
-        }
-
-        let len = coinbase_prefix[0] as usize;
-        if coinbase_prefix.len() < len + 1 {
-            return Err("Coinbase prefix too short for declared length");
-        }
-
-        if len == 0 || len > 8 {
-            return Err("Invalid BIP34 height length");
-        }
-
-        let mut height = 0u64;
-        for i in 0..len {
-            height |= (coinbase_prefix[i + 1] as u64) << (i * 8);
-        }
-
-        Ok(height)
-    }
-
-    /// Helper function to extract witness commitment from coinbase transaction outputs.
-    ///
-    /// Witness commitment is stored in an OP_RETURN output with format:
-    /// OP_RETURN 0x24 0xaa21a9ed <32-byte-commitment>
     /// Sends share data to Redis Stream.
     ///
     /// Data is sent asynchronously (fire-and-forget) to avoid blocking share processing.
     ///
     /// Includes minimal data required for client-side share hash verification:
     /// - Essential (8 fields): share_hash, coinbase_tx, prev_block_hash, bits, nonce, ntime, version, merkle_path
-    /// - Optional metadata (4 fields): user_id, coinbase_address, coinbase_prefix_tag, block_height
+    /// - Metadata (1 field): user_id (pool-internal routing ID, not derivable from coinbase_tx)
     ///
-    /// The coinbase_tx contains all necessary data (address, value, extranonce, tags, witness commitment)
-    /// allowing clients to verify their address and miner tag are in the transaction.
+    /// The coinbase_tx contains all Bitcoin data (address, block height, miner tag, extranonce, witness commitment).
+    /// Clients should parse coinbase_tx directly to extract these values, ensuring a single source of truth.
     pub async fn send_share_to_redis(
         &self,
         user_id: String,
@@ -1042,14 +1012,6 @@ impl ChannelManager {
             .map(|hash| format!("\"{}\"", hex::encode(hash)))
             .collect();
         let merkle_path_json = format!("[{}]", merkle_path_vec.join(","));
-
-        // Decode block height from coinbase prefix (BIP34)
-        let block_height = Self::decode_block_height(template.coinbase_prefix.inner_as_ref())
-            .map(|h| h.to_string())
-            .unwrap_or_else(|e| {
-                warn!("Failed to decode block height: {}", e);
-                "0".to_string()
-            });
 
         // Construct full coinbase transaction for hash verification
         // This allows clients to independently verify the hash
@@ -1127,27 +1089,9 @@ impl ChannelManager {
         }
         let coinbase_tx_hex = hex::encode(&coinbase_tx_bytes);
 
-        let (redis_client, redis_stream_name, coinbase_address, pool_tag, prev_block_hash_hex, bits_hex) = self.channel_manager_data.super_safe_lock(|data| {
+        let (redis_client, redis_stream_name, prev_block_hash_hex, bits_hex) = self.channel_manager_data.super_safe_lock(|data| {
             let redis_client = data.redis_client.clone();
             let redis_stream_name = data.redis_stream_name.clone();
-            let network = data.network;
-            let (coinbase_address, pool_tag) = data.user_to_channel
-                .get(&user_id)
-                .and_then(|handle| data.channel_to_user.get(handle))
-                .map(|mapping| {
-                    // Convert ScriptBuf to Bitcoin address string using configured network
-                    use stratum_apps::stratum_core::bitcoin::Address;
-                    let address_str = if let Some(net) = network {
-                        Address::from_script(&mapping.coinbase_address, net)
-                            .map(|addr| addr.to_string())
-                            .unwrap_or_else(|_| mapping.coinbase_address.to_hex_string())
-                    } else {
-                        // No network configured (using Sv2Tp), fallback to hex
-                        mapping.coinbase_address.to_hex_string()
-                    };
-                    (address_str, mapping.coinbase_prefix_tag.clone())
-                })
-                .unwrap_or_else(|| ("unknown".to_string(), "unknown".to_string()));
 
             // Get block data from last new prev hash
             let (prev_block_hash_hex, bits_hex) = data.last_new_prev_hash.as_ref()
@@ -1163,7 +1107,7 @@ impl ChannelManager {
                 })
                 .unwrap_or_else(|| (String::new(), String::new()));
 
-            (redis_client, redis_stream_name, coinbase_address, pool_tag, prev_block_hash_hex, bits_hex)
+            (redis_client, redis_stream_name, prev_block_hash_hex, bits_hex)
         });
 
         if redis_client.is_none() {
@@ -1183,7 +1127,8 @@ impl ChannelManager {
 
                 // Build the fields for XADD - minimal data required for client-side hash verification
                 // Essential fields (8): share_hash, coinbase_tx, prev_block_hash, bits, nonce, ntime, version, merkle_path
-                // Optional metadata (3): user_id, coinbase_address, block_height
+                // Metadata (1): user_id (pool-internal, not derivable from coinbase_tx)
+                // All other data (address, miner tag, block height) can be extracted from coinbase_tx
                 let fields: Vec<(&str, String)> = vec![
                     // Required for verification
                     ("share_hash", share_hash.unwrap_or_else(|| "".to_string())),
@@ -1195,11 +1140,8 @@ impl ChannelManager {
                     ("version", version.to_string()),
                     ("merkle_path", merkle_path_json),
 
-                    // Optional metadata
+                    // Metadata
                     ("user_id", user_id.clone()),
-                    ("coinbase_address", coinbase_address),
-                    ("coinbase_prefix_tag", pool_tag),
-                    ("block_height", block_height),
                 ];
 
                 match client.xadd::<_, _, _, _, String>(&stream_name, "*", &fields).await {
