@@ -93,15 +93,9 @@ impl PoolSv2 {
 
         // Initialize Redis connection if configured
         if let Some(base_url) = self.config.redis_endpoint() {
-            let redis_url = match self.config.redis_password_env() {
-                Some(env_var) => match std::env::var(env_var) {
-                    Ok(password) => inject_redis_password(&base_url, &password),
-                    Err(_) => {
-                        warn!("redis_password_env is set to '{}' but that environment variable is not set; connecting without password", env_var);
-                        base_url
-                    }
-                },
-                None => base_url,
+            let redis_url = match std::env::var("REDIS_PASSWORD") {
+                Ok(password) => inject_redis_password(&base_url, &password),
+                Err(_) => base_url,
             };
             info!("Initializing Redis connection to {}", redact_redis_url(&redis_url));
             let redis_stream_name = self.config.redis_stream_name();

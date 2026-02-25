@@ -43,8 +43,6 @@ pub struct PoolConfig {
     #[serde(default)]
     redis_endpoint: Option<String>,
     #[serde(default)]
-    redis_password_env: Option<String>,
-    #[serde(default)]
     redis_stream_name: Option<String>,
     #[serde(default)]
     default_user_id: Option<String>,
@@ -84,7 +82,6 @@ impl PoolConfig {
             required_extensions,
             monitoring_address: None,
             redis_endpoint: None,
-            redis_password_env: None,
             redis_stream_name: None,
             default_user_id: None,
         }
@@ -181,11 +178,6 @@ impl PoolConfig {
     /// Returns the Redis endpoint URL (optional).
     pub fn redis_endpoint(&self) -> Option<String> {
         self.redis_endpoint.clone()
-    }
-
-    /// Returns the name of the environment variable that holds the Redis password (optional).
-    pub fn redis_password_env(&self) -> Option<&str> {
-        self.redis_password_env.as_deref()
     }
 
     /// Returns the Redis stream name (optional, defaults to "shares").
