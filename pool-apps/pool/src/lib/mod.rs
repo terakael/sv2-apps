@@ -92,8 +92,18 @@ impl PoolSv2 {
         });
 
         // Initialize Redis connection if configured
-        if let Some(redis_url) = self.config.redis_endpoint() {
-            info!("Initializing Redis connection to {}", redis_url);
+        if let Some(base_url) = self.config.redis_endpoint() {
+            let redis_url = match self.config.redis_password_env() {
+                Some(env_var) => match std::env::var(env_var) {
+                    Ok(password) => inject_redis_password(&base_url, &password),
+                    Err(_) => {
+                        warn!("redis_password_env is set to '{}' but that environment variable is not set; connecting without password", env_var);
+                        base_url
+                    }
+                },
+                None => base_url,
+            };
+            info!("Initializing Redis connection to {}", redact_redis_url(&redis_url));
             let redis_stream_name = self.config.redis_stream_name();
 
             match redis::Client::open(redis_url.as_str()) {
@@ -304,6 +314,49 @@ impl PoolSv2 {
         task_manager.join_all().await;
         info!("Pool shutdown complete.");
         Ok(())
+    }
+}
+
+/// Injects a password into a Redis URL.
+///
+/// Handles the following cases:
+/// - `redis://host:port` → `redis://:password@host:port`
+/// - `redis://:oldpass@host:port` → `redis://:password@host:port`
+/// - `redis://user:oldpass@host:port` → `redis://user:password@host:port`
+fn inject_redis_password(url: &str, password: &str) -> String {
+    let Some(scheme_end) = url.find("://") else {
+        return url.to_string();
+    };
+    let scheme_end = scheme_end + 3;
+    let after_scheme = &url[scheme_end..];
+
+    if let Some(at_pos) = after_scheme.find('@') {
+        // Already has auth — replace the password portion
+        let auth = &after_scheme[..at_pos];
+        let host_part = &after_scheme[at_pos + 1..];
+        let user = auth.find(':').map(|c| &auth[..c]).unwrap_or(auth);
+        format!("{}{}:{}@{}", &url[..scheme_end], user, password, host_part)
+    } else {
+        // No auth — prepend `:password@`
+        format!("{}:{}@{}", &url[..scheme_end], password, after_scheme)
+    }
+}
+
+/// Returns the Redis URL with the password replaced by `***` for safe logging.
+fn redact_redis_url(url: &str) -> String {
+    let Some(scheme_end) = url.find("://") else {
+        return url.to_string();
+    };
+    let scheme_end = scheme_end + 3;
+    let after_scheme = &url[scheme_end..];
+
+    if let Some(at_pos) = after_scheme.find('@') {
+        let auth = &after_scheme[..at_pos];
+        let host_part = &after_scheme[at_pos + 1..];
+        let user = auth.find(':').map(|c| &auth[..c]).unwrap_or(auth);
+        format!("{}{}:***@{}", &url[..scheme_end], user, host_part)
+    } else {
+        url.to_string()
     }
 }
 
