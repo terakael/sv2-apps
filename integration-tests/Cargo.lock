@@ -147,6 +147,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-swap"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9f3647c145568cec02c42054e07bdf9a5a698e15b466fb2341bfc393cd24aa5"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "arraydeque"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -196,6 +205,12 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "autocfg"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "axum"
@@ -250,6 +265,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "backon"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cffb0e931875b666fc4fcb20fee52e9bbd1ef836fd9e9e04ec21555f9f85f7ef"
+dependencies = [
+ "fastrand",
+]
+
+[[package]]
 name = "base58ck"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -288,7 +312,7 @@ name = "binary_codec_sv2"
 version = "3.0.0"
 source = "git+https://github.com/stratum-mining/stratum?rev=v1.5.0#30405fab90ae02a08ec05abade993610dc9d68f6"
 dependencies = [
- "buffer_sv2 2.0.0 (git+https://github.com/stratum-mining/stratum?rev=v1.5.0)",
+ "buffer_sv2 2.0.0",
 ]
 
 [[package]]
@@ -302,10 +326,10 @@ dependencies = [
 
 [[package]]
 name = "binary_sv2"
-version = "5.0.0"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+version = "5.0.1"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "buffer_sv2 2.0.0 (git+https://github.com/stratum-mining/stratum?branch=main)",
+ "buffer_sv2 3.0.1",
  "derive_codec_sv2 1.1.2",
 ]
 
@@ -465,16 +489,15 @@ dependencies = [
 [[package]]
 name = "buffer_sv2"
 version = "2.0.0"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+source = "git+https://github.com/stratum-mining/stratum?rev=v1.5.0#30405fab90ae02a08ec05abade993610dc9d68f6"
 dependencies = [
  "aes-gcm",
- "generic-array",
 ]
 
 [[package]]
 name = "buffer_sv2"
-version = "2.0.0"
-source = "git+https://github.com/stratum-mining/stratum?rev=v1.5.0#30405fab90ae02a08ec05abade993610dc9d68f6"
+version = "3.0.1"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "aes-gcm",
 ]
@@ -600,15 +623,14 @@ dependencies = [
 
 [[package]]
 name = "channels_sv2"
-version = "3.0.0"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+version = "3.0.1"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
+ "binary_sv2 5.0.1",
  "bitcoin",
- "common_messages_sv2 6.0.2",
  "mining_sv2 7.0.0",
  "primitive-types",
- "template_distribution_sv2 4.0.2",
+ "template_distribution_sv2 5.0.0",
  "tracing",
 ]
 
@@ -669,7 +691,7 @@ version = "3.0.1"
 source = "git+https://github.com/stratum-mining/stratum?rev=v1.5.0#30405fab90ae02a08ec05abade993610dc9d68f6"
 dependencies = [
  "binary_sv2 4.0.0",
- "buffer_sv2 2.0.0 (git+https://github.com/stratum-mining/stratum?rev=v1.5.0)",
+ "buffer_sv2 2.0.0",
  "framing_sv2 5.0.1",
  "noise_sv2 1.4.0",
  "rand 0.8.5",
@@ -678,13 +700,13 @@ dependencies = [
 
 [[package]]
 name = "codec_sv2"
-version = "4.0.0"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+version = "4.0.1"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
- "buffer_sv2 2.0.0 (git+https://github.com/stratum-mining/stratum?branch=main)",
- "framing_sv2 6.0.0",
- "noise_sv2 1.4.1",
+ "binary_sv2 5.0.1",
+ "buffer_sv2 3.0.1",
+ "framing_sv2 6.0.1",
+ "noise_sv2 1.4.2",
  "rand 0.8.5",
  "tracing",
 ]
@@ -696,6 +718,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
+name = "combine"
+version = "4.6.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "memchr",
+ "pin-project-lite",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "common_messages_sv2"
 version = "6.0.1"
 source = "git+https://github.com/stratum-mining/stratum?rev=v1.5.0#30405fab90ae02a08ec05abade993610dc9d68f6"
@@ -705,10 +741,10 @@ dependencies = [
 
 [[package]]
 name = "common_messages_sv2"
-version = "6.0.2"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+version = "7.0.0"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
+ "binary_sv2 5.0.1",
 ]
 
 [[package]]
@@ -804,6 +840,16 @@ name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91e195e091a93c46f7102ec7818a2aa394e1e1771c3ab4825963fa03e45afb8f"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
+]
+
+[[package]]
+name = "core-foundation"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2a6cd9ae233e7f62ba4e9353e81a88df7fc8a5987b8d445b4d90c879bd156f6"
 dependencies = [
  "core-foundation-sys",
  "libc",
@@ -940,7 +986,7 @@ dependencies = [
 [[package]]
 name = "derive_codec_sv2"
 version = "1.1.2"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 
 [[package]]
 name = "digest"
@@ -1003,6 +1049,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "either"
+version = "1.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+
+[[package]]
 name = "embedded-io"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1047,9 +1099,9 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 [[package]]
 name = "extensions_sv2"
 version = "0.1.0"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
+ "binary_sv2 5.0.1",
 ]
 
 [[package]]
@@ -1105,6 +1157,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "foreign-types"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"
+dependencies = [
+ "foreign-types-shared",
+]
+
+[[package]]
+name = "foreign-types-shared"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
+
+[[package]]
 name = "form_urlencoded"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1119,18 +1186,18 @@ version = "5.0.1"
 source = "git+https://github.com/stratum-mining/stratum?rev=v1.5.0#30405fab90ae02a08ec05abade993610dc9d68f6"
 dependencies = [
  "binary_sv2 4.0.0",
- "buffer_sv2 2.0.0 (git+https://github.com/stratum-mining/stratum?rev=v1.5.0)",
+ "buffer_sv2 2.0.0",
  "noise_sv2 1.4.0",
 ]
 
 [[package]]
 name = "framing_sv2"
-version = "6.0.0"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+version = "6.0.1"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
- "buffer_sv2 2.0.0 (git+https://github.com/stratum-mining/stratum?branch=main)",
- "noise_sv2 1.4.1",
+ "binary_sv2 5.0.1",
+ "buffer_sv2 3.0.1",
+ "noise_sv2 1.4.2",
 ]
 
 [[package]]
@@ -1306,17 +1373,17 @@ dependencies = [
 
 [[package]]
 name = "handlers_sv2"
-version = "0.2.1"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+version = "0.2.2"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
- "common_messages_sv2 6.0.2",
+ "binary_sv2 5.0.1",
+ "common_messages_sv2 7.0.0",
  "extensions_sv2",
- "framing_sv2 6.0.0",
+ "framing_sv2 6.0.1",
  "job_declaration_sv2 6.0.0",
  "mining_sv2 7.0.0",
- "parsers_sv2 0.2.1",
- "template_distribution_sv2 4.0.2",
+ "parsers_sv2 0.2.2",
+ "template_distribution_sv2 5.0.0",
  "trait-variant",
 ]
 
@@ -1487,6 +1554,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper-rustls"
+version = "0.27.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3c93eb611681b207e1fe55d5a71ecf91572ec8a6705cdb6857f7d8d5242cf58"
+dependencies = [
+ "http",
+ "hyper",
+ "hyper-util",
+ "rustls 0.23.37",
+ "rustls-pki-types",
+ "tokio",
+ "tokio-rustls",
+ "tower-service",
+]
+
+[[package]]
+name = "hyper-tls"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
+dependencies = [
+ "bytes",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "native-tls",
+ "tokio",
+ "tokio-native-tls",
+ "tower-service",
+]
+
+[[package]]
 name = "hyper-util"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1504,7 +1603,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2",
+ "socket2 0.6.1",
  "system-configuration",
  "tokio",
  "tower-layer",
@@ -1687,10 +1786,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "469fb0b9cefa57e3ef31275ee7cacb78f2fdca44e4765491884a2b119d4eb130"
 
 [[package]]
+name = "iri-string"
+version = "0.7.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c91338f0783edbd6195decb37bae672fd3b165faffb89bf7b9e6942f8b1a731a"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
+
+[[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+dependencies = [
+ "either",
+]
 
 [[package]]
 name = "itoa"
@@ -1719,7 +1837,7 @@ name = "jd_server"
 version = "0.1.3"
 dependencies = [
  "async-channel",
- "buffer_sv2 2.0.0 (git+https://github.com/stratum-mining/stratum?rev=v1.5.0)",
+ "buffer_sv2 2.0.0",
  "clap",
  "config",
  "config_helpers_sv2",
@@ -1748,9 +1866,19 @@ dependencies = [
 [[package]]
 name = "job_declaration_sv2"
 version = "6.0.0"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
+ "binary_sv2 5.0.1",
+]
+
+[[package]]
+name = "js-sys"
+version = "0.3.91"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b49715b7073f385ba4bc528e5747d02e66cb39c6146efb66b781f131f0fb399c"
+dependencies = [
+ "once_cell",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1887,7 +2015,7 @@ version = "0.1.3"
 dependencies = [
  "async-channel",
  "async-recursion",
- "buffer_sv2 2.0.0 (git+https://github.com/stratum-mining/stratum?rev=v1.5.0)",
+ "buffer_sv2 2.0.0",
  "clap",
  "futures",
  "key-utils",
@@ -1912,9 +2040,9 @@ dependencies = [
 [[package]]
 name = "mining_sv2"
 version = "7.0.0"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
+ "binary_sv2 5.0.1",
 ]
 
 [[package]]
@@ -1954,8 +2082,8 @@ version = "2.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05015102dad0f7d61691ca347e9d9d9006685a64aefb3d79eecf62665de2153d"
 dependencies = [
- "rustls",
- "rustls-webpki",
+ "rustls 0.21.12",
+ "rustls-webpki 0.101.7",
  "serde",
  "serde_json",
  "webpki-roots",
@@ -1970,6 +2098,23 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "native-tls"
+version = "0.2.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "465500e14ea162429d264d44189adc38b199b62b1c21eea9f69e4b73cb03bbf2"
+dependencies = [
+ "libc",
+ "log",
+ "openssl",
+ "openssl-probe",
+ "openssl-sys",
+ "schannel",
+ "security-framework",
+ "security-framework-sys",
+ "tempfile",
 ]
 
 [[package]]
@@ -2004,14 +2149,12 @@ dependencies = [
 
 [[package]]
 name = "noise_sv2"
-version = "1.4.1"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+version = "1.4.2"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
  "aes-gcm",
  "chacha20poly1305",
- "generic-array",
  "rand 0.8.5",
- "rand_chacha 0.3.1",
  "secp256k1 0.28.2",
 ]
 
@@ -2035,6 +2178,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-bigint"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
+dependencies = [
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "num-format"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2042,6 +2195,24 @@ checksum = "a652d9771a63711fd3c3deb670acfbe5c30a4072e664d7a3bf5a9e1056ac72c3"
 dependencies = [
  "arrayvec",
  "itoa",
+]
+
+[[package]]
+name = "num-integer"
+version = "0.1.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "num-traits"
+version = "0.2.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
+dependencies = [
+ "autocfg",
 ]
 
 [[package]]
@@ -2061,6 +2232,50 @@ name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
+
+[[package]]
+name = "openssl"
+version = "0.10.76"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "951c002c75e16ea2c65b8c7e4d3d51d5530d8dfa7d060b4776828c88cfb18ecf"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "foreign-types",
+ "libc",
+ "once_cell",
+ "openssl-macros",
+ "openssl-sys",
+]
+
+[[package]]
+name = "openssl-macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+]
+
+[[package]]
+name = "openssl-probe"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
+
+[[package]]
+name = "openssl-sys"
+version = "0.9.112"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57d55af3b3e226502be1526dfdba67ab0e9c96fc293004e79576b2b9edb0dbdb"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+ "vcpkg",
+]
 
 [[package]]
 name = "option-ext"
@@ -2144,16 +2359,16 @@ dependencies = [
 
 [[package]]
 name = "parsers_sv2"
-version = "0.2.1"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+version = "0.2.2"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
- "common_messages_sv2 6.0.2",
+ "binary_sv2 5.0.1",
+ "common_messages_sv2 7.0.0",
  "extensions_sv2",
- "framing_sv2 6.0.0",
+ "framing_sv2 6.0.1",
  "job_declaration_sv2 6.0.0",
  "mining_sv2 7.0.0",
- "template_distribution_sv2 4.0.2",
+ "template_distribution_sv2 5.0.0",
 ]
 
 [[package]]
@@ -2224,6 +2439,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
+name = "pkg-config"
+version = "0.3.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
+
+[[package]]
 name = "poly1305"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2251,12 +2472,15 @@ name = "pool_sv2"
 version = "0.2.0"
 dependencies = [
  "async-channel",
+ "axum",
  "bitcoin_core_sv2",
  "clap",
  "config",
  "hex",
  "hotpath",
  "rand 0.8.5",
+ "redis",
+ "reqwest",
  "secp256k1 0.28.2",
  "serde",
  "stratum-apps",
@@ -2413,6 +2637,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "redis"
+version = "0.27.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09d8f99a4090c89cc489a94833c901ead69bfbf3877b4867d5482e321ee875bc"
+dependencies = [
+ "arc-swap",
+ "async-trait",
+ "backon",
+ "bytes",
+ "combine",
+ "futures",
+ "futures-util",
+ "itertools",
+ "itoa",
+ "num-bigint",
+ "percent-encoding",
+ "pin-project-lite",
+ "ryu",
+ "sha1_smol",
+ "socket2 0.5.10",
+ "tokio",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2469,6 +2719,46 @@ name = "regex-syntax"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
+
+[[package]]
+name = "reqwest"
+version = "0.12.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "encoding_rs",
+ "futures-core",
+ "h2",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-rustls",
+ "hyper-tls",
+ "hyper-util",
+ "js-sys",
+ "log",
+ "mime",
+ "native-tls",
+ "percent-encoding",
+ "pin-project-lite",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sync_wrapper",
+ "tokio",
+ "tokio-native-tls",
+ "tower",
+ "tower-http",
+ "tower-service",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
 
 [[package]]
 name = "ring"
@@ -2603,8 +2893,30 @@ checksum = "3f56a14d1f48b391359b22f731fd4bd7e43c97f3c50eee276f3aa09c94784d3e"
 dependencies = [
  "log",
  "ring",
- "rustls-webpki",
+ "rustls-webpki 0.101.7",
  "sct",
+]
+
+[[package]]
+name = "rustls"
+version = "0.23.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "758025cb5fccfd3bc2fd74708fd4682be41d99e5dff73c377c0646c6012c73a4"
+dependencies = [
+ "once_cell",
+ "rustls-pki-types",
+ "rustls-webpki 0.103.9",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "rustls-pki-types"
+version = "1.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be040f8b0a225e40375822a563fa9524378b9d63112f53e19ffff34df5d33fdd"
+dependencies = [
+ "zeroize",
 ]
 
 [[package]]
@@ -2614,6 +2926,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b6275d1ee7a1cd780b64aca7726599a1dbc893b1e64144529e55c3c2f745765"
 dependencies = [
  "ring",
+ "untrusted",
+]
+
+[[package]]
+name = "rustls-webpki"
+version = "0.103.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7df23109aa6c1567d1c575b9952556388da57401e4ace1d15f79eedad0d8f53"
+dependencies = [
+ "ring",
+ "rustls-pki-types",
  "untrusted",
 ]
 
@@ -2636,6 +2959,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
+]
+
+[[package]]
+name = "schannel"
+version = "0.1.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91c1b7e4904c873ef0710c1f407dde2e6287de2bebc1bbbf7d430bb7cbffd939"
+dependencies = [
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2692,6 +3024,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4387882333d3aa8cb20530a17c69a3752e97837832f34f6dccc760e715001d9"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "security-framework"
+version = "3.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d17b898a6d6948c3a8ee4372c17cb384f90d2e6e912ef00895b14fd7ab54ec38"
+dependencies = [
+ "bitflags",
+ "core-foundation 0.10.1",
+ "core-foundation-sys",
+ "libc",
+ "security-framework-sys",
+]
+
+[[package]]
+name = "security-framework-sys"
+version = "2.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ce2691df843ecc5d231c0b14ece2acc3efb62c0a398c7e1d875f3983ce020e3"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
 ]
 
 [[package]]
@@ -2768,6 +3123,12 @@ dependencies = [
  "ryu",
  "serde",
 ]
+
+[[package]]
+name = "sha1_smol"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
 
 [[package]]
 name = "sha2"
@@ -2857,6 +3218,16 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "socket2"
+version = "0.5.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
+dependencies = [
+ "libc",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "socket2"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17129e116933cf371d018bb80ae557e889637989d8638274fb25622827b03881"
@@ -2917,35 +3288,35 @@ dependencies = [
 
 [[package]]
 name = "stratum-core"
-version = "0.2.0"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+version = "0.2.1"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
+ "binary_sv2 5.0.1",
  "bitcoin",
- "buffer_sv2 2.0.0 (git+https://github.com/stratum-mining/stratum?branch=main)",
- "channels_sv2 3.0.0",
- "codec_sv2 4.0.0",
- "common_messages_sv2 6.0.2",
+ "buffer_sv2 3.0.1",
+ "channels_sv2 3.0.1",
+ "codec_sv2 4.0.1",
+ "common_messages_sv2 7.0.0",
  "extensions_sv2",
- "framing_sv2 6.0.0",
- "handlers_sv2 0.2.1",
+ "framing_sv2 6.0.1",
+ "handlers_sv2 0.2.2",
  "job_declaration_sv2 6.0.0",
  "mining_sv2 7.0.0",
- "noise_sv2 1.4.1",
- "parsers_sv2 0.2.1",
+ "noise_sv2 1.4.2",
+ "parsers_sv2 0.2.2",
  "stratum_translation",
  "sv1_api",
- "template_distribution_sv2 4.0.2",
+ "template_distribution_sv2 5.0.0",
 ]
 
 [[package]]
 name = "stratum_translation"
 version = "0.1.2"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
+ "binary_sv2 5.0.1",
  "bitcoin",
- "channels_sv2 3.0.0",
+ "channels_sv2 3.0.1",
  "mining_sv2 7.0.0",
  "sv1_api",
  "tracing",
@@ -2965,13 +3336,12 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "sv1_api"
-version = "2.1.2"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+version = "2.1.3"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
+ "binary_sv2 5.0.1",
  "bitcoin_hashes 0.3.2",
  "byteorder",
- "hex",
  "serde",
  "serde_json",
  "tracing",
@@ -3004,6 +3374,9 @@ name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
+dependencies = [
+ "futures-core",
+]
 
 [[package]]
 name = "synstructure"
@@ -3023,7 +3396,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c879d448e9d986b661742763247d3693ed13609438cf3d006f51f5368a5ba6b"
 dependencies = [
  "bitflags",
- "core-foundation",
+ "core-foundation 0.9.4",
  "system-configuration-sys",
 ]
 
@@ -3060,6 +3433,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "655da9c7eb6305c55742045d5a8d2037996d61d8de95806335c7c86ce0f82e9c"
 dependencies = [
  "fastrand",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
@@ -3075,10 +3449,10 @@ dependencies = [
 
 [[package]]
 name = "template_distribution_sv2"
-version = "4.0.2"
-source = "git+https://github.com/stratum-mining/stratum?branch=main#855ed9fe7c8aad1160043fecd365ed5c3c2429c2"
+version = "5.0.0"
+source = "git+https://github.com/terakael/stratum.git?branch=dynamic#14312a271481da309ba97628065331cd55e82c11"
 dependencies = [
- "binary_sv2 5.0.0",
+ "binary_sv2 5.0.1",
 ]
 
 [[package]]
@@ -3161,7 +3535,7 @@ dependencies = [
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2",
+ "socket2 0.6.1",
  "tokio-macros",
  "tracing",
  "windows-sys 0.61.2",
@@ -3176,6 +3550,26 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.114",
+]
+
+[[package]]
+name = "tokio-native-tls"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbae76ab933c85776efabc971569dd6119c580d8f5d448769dec1764bf796ef2"
+dependencies = [
+ "native-tls",
+ "tokio",
+]
+
+[[package]]
+name = "tokio-rustls"
+version = "0.26.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1729aa945f29d91ba541258c8df89027d5792d85a8841fb65e8bf0f4ede4ef61"
+dependencies = [
+ "rustls 0.23.37",
+ "tokio",
 ]
 
 [[package]]
@@ -3277,6 +3671,24 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
+dependencies = [
+ "bitflags",
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "iri-string",
+ "pin-project-lite",
+ "tower",
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]
@@ -3524,6 +3936,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
+name = "vcpkg"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3561,6 +3979,75 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9517f9239f02c069db75e65f174b3da828fe5f5b945c4dd26bd25d89c03ebcf5"
 dependencies = [
  "wit-bindgen",
+]
+
+[[package]]
+name = "wasm-bindgen"
+version = "0.2.114"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6532f9a5c1ece3798cb1c2cfdba640b9b3ba884f5db45973a6f442510a87d38e"
+dependencies = [
+ "cfg-if",
+ "once_cell",
+ "rustversion",
+ "wasm-bindgen-macro",
+ "wasm-bindgen-shared",
+]
+
+[[package]]
+name = "wasm-bindgen-futures"
+version = "0.4.64"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9c5522b3a28661442748e09d40924dfb9ca614b21c00d3fd135720e48b67db8"
+dependencies = [
+ "cfg-if",
+ "futures-util",
+ "js-sys",
+ "once_cell",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "wasm-bindgen-macro"
+version = "0.2.114"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18a2d50fcf105fb33bb15f00e7a77b772945a2ee45dcf454961fd843e74c18e6"
+dependencies = [
+ "quote",
+ "wasm-bindgen-macro-support",
+]
+
+[[package]]
+name = "wasm-bindgen-macro-support"
+version = "0.2.114"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03ce4caeaac547cdf713d280eda22a730824dd11e6b8c3ca9e42247b25c631e3"
+dependencies = [
+ "bumpalo",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+ "wasm-bindgen-shared",
+]
+
+[[package]]
+name = "wasm-bindgen-shared"
+version = "0.2.114"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75a326b8c223ee17883a4251907455a2431acc2791c98c26279376490c378c16"
+dependencies = [
+ "unicode-ident",
+]
+
+[[package]]
+name = "web-sys"
+version = "0.3.91"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "854ba17bb104abfb26ba36da9729addc7ce7f06f5c0f90f3c391f8461cca21f9"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]
