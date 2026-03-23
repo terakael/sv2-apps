@@ -818,6 +818,24 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
         let downstream_id =
             client_id.expect("client_id must be present for downstream_id extraction");
 
+        let handle = ChannelHandle {
+            downstream_id,
+            channel_id: msg.channel_id,
+        };
+
+        let user_id = self.channel_manager_data.super_safe_lock(|data| {
+            data.get_user_for_channel(&handle).map(|s| s.to_string())
+        });
+
+        if let Some(ref uid) = user_id {
+            info!("Share from user {} on channel {}_{}", uid, downstream_id, msg.channel_id);
+        } else {
+            info!("Share from unassigned channel {}_{}", downstream_id, msg.channel_id);
+        }
+
+        // Clone the miner's extranonce bytes before the lock so they're available afterwards
+        let miner_extranonce: Vec<u8> = msg.extranonce.inner_as_ref().to_vec();
+
         // Extract user_identity from TLV fields if the extension is negotiated
         let negotiated_extensions = self.get_negotiated_extensions_with_client(client_id);
         let user_identity = if negotiated_extensions
@@ -836,7 +854,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
             None
         };
 
-        let messages = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
+        let (messages, share_hash, is_block, job) = self.channel_manager_data.super_safe_lock(|channel_manager_data| {
             let channel_id = msg.channel_id;
             let Some(downstream) = channel_manager_data.downstream.get(&downstream_id) else {
                 return Err(PoolError::disconnect(PoolErrorKind::DownstreamNotFound(downstream_id), downstream_id));
@@ -844,6 +862,8 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
 
             downstream.downstream_data.super_safe_lock(|downstream_data| {
                 let mut messages: Vec<RouteMessageTo> = Vec::new();
+                let mut share_hash: Option<String> = None;
+                let mut is_block = false;
                 let Some(extended_channel) = downstream_data.extended_channels.get_mut(&channel_id) else {
                     let error = SubmitSharesError {
                         channel_id,
@@ -854,7 +874,7 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                             .expect("error code must be valid string"),
                     };
                     error!("SubmitSharesError: downstream_id: {}, channel_id: {}, sequence_number: {}, error_code: invalid-channel-id ❌", downstream_id, channel_id, msg.sequence_number);
-                    return Ok(vec![(downstream_id, Mining::SubmitSharesError(error)).into()]);
+                    return Ok((vec![(downstream_id, Mining::SubmitSharesError(error)).into()], None, false, None));
                 };
 
                 if let Some(_user_identity) = user_identity {
@@ -862,14 +882,15 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                 }
 
                 let Some(vardiff) = channel_manager_data.vardiff.get_mut(&(downstream_id, channel_id).into()) else {
-                    return Ok(vec![(downstream_id, Mining::CloseChannel(create_close_channel_msg(channel_id, "invalid-channel-id"))).into()]);
+                    return Ok((vec![(downstream_id, Mining::CloseChannel(create_close_channel_msg(channel_id, "invalid-channel-id"))).into()], None, false, None));
                 };
 
                 let res = extended_channel.validate_share(msg.clone());
                 vardiff.increment_shares_since_last_update();
 
                 match res {
-                    Ok(ShareValidationResult::Valid(share_hash)) => {
+                    Ok(ShareValidationResult::Valid(valid_share_hash)) => {
+                        share_hash = Some(format!("{}", valid_share_hash));
                         let share_accounting = extended_channel.get_share_accounting();
                         if share_accounting.should_acknowledge() {
                             let success = SubmitSharesSuccess {
@@ -884,12 +905,14 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                             let share_work = extended_channel.get_target().difficulty_float();
                             info!(
                                 "SubmitSharesExtended: valid share | downstream_id: {}, channel_id: {}, sequence_number: {}, share_hash: {}, share_work: {} ✅",
-                                downstream_id, channel_id, msg.sequence_number, share_hash, share_work
+                                downstream_id, channel_id, msg.sequence_number, valid_share_hash, share_work
                             );
                         }
                     }
-                    Ok(ShareValidationResult::BlockFound(share_hash, template_id, coinbase)) => {
-                        info!("SubmitSharesExtended: 💰 Block Found!!! 💰{share_hash}");
+                    Ok(ShareValidationResult::BlockFound(block_share_hash, template_id, coinbase)) => {
+                        share_hash = Some(format!("{}", block_share_hash));
+                        is_block = true;
+                        info!("SubmitSharesExtended: 💰 Block Found!!! 💰{block_share_hash}");
                         // if we have a template id (i.e.: this was not a custom job)
                         // we can propagate the solution to the TP
                         if let Some(template_id) = template_id {
@@ -989,12 +1012,86 @@ impl HandleMiningMessagesFromClientAsync for ChannelManager {
                     }
                 }
 
-                Ok(messages)
+                // Get the job for Redis data extraction
+                let job = extended_channel.get_active_job()
+                    .filter(|j| j.get_job_id() == msg.job_id)
+                    .or_else(|| extended_channel.get_past_job(msg.job_id));
+
+                Ok((messages, share_hash, is_block, job))
             })
         })?;
 
         for message in messages {
             message.forward(&self.channel_manager_channel).await;
+        }
+
+        // Send share to Redis and handle quota accounting if user is assigned
+        if let Some(user_id) = user_id {
+            if let Some(job) = job {
+                if let Some(hash) = share_hash {
+                    info!("Attempting to send share to Redis for user {}", user_id);
+                    if let Err(e) = self.send_extended_share_to_redis(
+                        user_id.clone(),
+                        msg.job_id,
+                        msg.nonce,
+                        msg.ntime,
+                        msg.version,
+                        Some(hash),
+                        is_block,
+                        &job,
+                        &miner_extranonce,
+                    ).await {
+                        warn!("Failed to send share to Redis: {:?}", e);
+                    }
+                } else {
+                    info!("Skipping Redis publish for user {} - share validation failed", user_id);
+                }
+            } else {
+                warn!("Could not retrieve job {} for Redis publish", msg.job_id);
+            }
+
+            // Check if we need to decrement remaining_shares and potentially switch back to house address
+            let should_revert = self.channel_manager_data.super_safe_lock(|data| {
+                if let Some(mapping) = data.channel_to_user.get_mut(&handle) {
+                    if let Some(remaining) = mapping.remaining_shares.as_mut() {
+                        if *remaining > 0 {
+                            *remaining -= 1;
+                            info!("User {} has {} shares remaining", user_id, *remaining);
+
+                            if *remaining == 0 {
+                                info!("User {} has exhausted their share quota, reverting to house address", user_id);
+                                return true;
+                            }
+                        }
+                    }
+                }
+                false
+            });
+
+            if should_revert {
+                if let (Some(default_user_id), Some(default_coinbase_script)) =
+                    self.channel_manager_data.super_safe_lock(|data|
+                        (data.default_user_id.clone(), data.default_coinbase_script.clone())
+                    ) {
+                    info!("Switching channel {}_{} back to house address", handle.downstream_id, handle.channel_id);
+
+                    self.channel_manager_data.super_safe_lock(|data| {
+                        data.assign_user_to_channel(
+                            default_user_id.clone(),
+                            handle.clone(),
+                            default_coinbase_script.clone(),
+                            default_user_id.clone(),
+                            None,
+                        );
+                    });
+
+                    if let Err(e) = self.switch_channel_coinbase(handle, default_coinbase_script).await {
+                        warn!("Failed to switch back to house address: {:?}", e);
+                    }
+                }
+            }
+        } else {
+            info!("No user assigned to channel, skipping Redis publish");
         }
 
         Ok(())

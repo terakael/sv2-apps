@@ -886,43 +886,74 @@ impl ChannelManager {
                 })?;
 
             downstream.downstream_data.super_safe_lock(|dd| {
-                let channel = dd
-                    .standard_channels
-                    .get_mut(&handle.channel_id)
-                    .ok_or_else(|| PoolError::shutdown(PoolErrorKind::ChannelNotFound))?;
-
                 let mut messages = Vec::new();
 
-                // Update ACTIVE job (currently being mined)
-                if let Some(active_template) = &data.last_active_template {
-                    let coinbase_output = TxOut {
-                        value: Amount::from_sat(active_template.coinbase_tx_value_remaining),
-                        script_pubkey: coinbase_address.clone(),
-                    };
+                if let Some(channel) = dd.standard_channels.get_mut(&handle.channel_id) {
+                    // Update ACTIVE job (currently being mined)
+                    if let Some(active_template) = &data.last_active_template {
+                        let coinbase_output = TxOut {
+                            value: Amount::from_sat(active_template.coinbase_tx_value_remaining),
+                            script_pubkey: coinbase_address.clone(),
+                        };
 
-                    channel
-                        .on_new_template(active_template.clone(), vec![coinbase_output])
-                        .map_err(PoolError::shutdown)?;
+                        channel
+                            .on_new_template(active_template.clone(), vec![coinbase_output])
+                            .map_err(PoolError::shutdown)?;
 
-                    // Send updated active job immediately
-                    if let Some(job) = channel.get_active_job() {
-                        messages.push((
-                            handle.downstream_id,
-                            Mining::NewMiningJob(job.get_job_message().clone()),
-                        ));
+                        // Send updated active job immediately
+                        if let Some(job) = channel.get_active_job() {
+                            messages.push((
+                                handle.downstream_id,
+                                Mining::NewMiningJob(job.get_job_message().clone()),
+                            ));
+                        }
                     }
-                }
 
-                // Update FUTURE job (pre-computed for next block)
-                if let Some(future_template) = &data.last_future_template {
-                    let coinbase_output = TxOut {
-                        value: Amount::from_sat(future_template.coinbase_tx_value_remaining),
-                        script_pubkey: coinbase_address.clone(),
-                    };
+                    // Update FUTURE job (pre-computed for next block)
+                    if let Some(future_template) = &data.last_future_template {
+                        let coinbase_output = TxOut {
+                            value: Amount::from_sat(future_template.coinbase_tx_value_remaining),
+                            script_pubkey: coinbase_address.clone(),
+                        };
 
-                    channel
-                        .on_new_template(future_template.clone(), vec![coinbase_output])
-                        .map_err(PoolError::shutdown)?;
+                        channel
+                            .on_new_template(future_template.clone(), vec![coinbase_output])
+                            .map_err(PoolError::shutdown)?;
+                    }
+                } else if let Some(channel) = dd.extended_channels.get_mut(&handle.channel_id) {
+                    // Update ACTIVE job (currently being mined)
+                    if let Some(active_template) = &data.last_active_template {
+                        let coinbase_output = TxOut {
+                            value: Amount::from_sat(active_template.coinbase_tx_value_remaining),
+                            script_pubkey: coinbase_address.clone(),
+                        };
+
+                        channel
+                            .on_new_template(active_template.clone(), vec![coinbase_output])
+                            .map_err(PoolError::shutdown)?;
+
+                        // Send updated active job immediately
+                        if let Some(job) = channel.get_active_job() {
+                            messages.push((
+                                handle.downstream_id,
+                                Mining::NewExtendedMiningJob(job.get_job_message().clone()),
+                            ));
+                        }
+                    }
+
+                    // Update FUTURE job (pre-computed for next block)
+                    if let Some(future_template) = &data.last_future_template {
+                        let coinbase_output = TxOut {
+                            value: Amount::from_sat(future_template.coinbase_tx_value_remaining),
+                            script_pubkey: coinbase_address.clone(),
+                        };
+
+                        channel
+                            .on_new_template(future_template.clone(), vec![coinbase_output])
+                            .map_err(PoolError::shutdown)?;
+                    }
+                } else {
+                    return Err(PoolError::shutdown(PoolErrorKind::ChannelNotFound));
                 }
 
                 Ok(messages)
@@ -966,9 +997,19 @@ impl ChannelManager {
                 // Update the standard channel's miner tag if it exists
                 if let Some(channel) = dd.standard_channels.get_mut(&handle.channel_id) {
                     channel
-                        .set_miner_tag(miner_tag)
+                        .set_miner_tag(miner_tag.clone())
                         .map_err(|e| {
                             error!("Failed to set standard channel miner tag: {:?}", e);
+                            PoolError::shutdown(PoolErrorKind::CouldNotInitiateSystem)
+                        })?;
+                }
+
+                // Update the extended channel's miner tag if it exists
+                if let Some(channel) = dd.extended_channels.get_mut(&handle.channel_id) {
+                    channel
+                        .set_miner_tag(miner_tag)
+                        .map_err(|e| {
+                            error!("Failed to set extended channel miner tag: {:?}", e);
                             PoolError::shutdown(PoolErrorKind::CouldNotInitiateSystem)
                         })?;
                 }
@@ -976,6 +1017,99 @@ impl ChannelManager {
                 Ok(())
             })
         })
+    }
+
+    /// Sends extended share data to Redis Stream.
+    ///
+    /// Equivalent to `send_share_to_redis` for extended channels. The coinbase tx is
+    /// reconstructed by concatenating the job's pre-built prefix/suffix with the extranonce:
+    /// `coinbase_tx_prefix + extranonce_prefix + miner_extranonce + coinbase_tx_suffix`
+    pub async fn send_extended_share_to_redis(
+        &self,
+        user_id: String,
+        job_id: u32,
+        nonce: u32,
+        ntime: u32,
+        version: u32,
+        share_hash: Option<String>,
+        _is_block: bool,
+        job: &ExtendedJob<'_>,
+        miner_extranonce: &[u8],
+    ) -> PoolResult<(), error::ChannelManager> {
+        // Extract merkle path directly from the extended job
+        let merkle_path_vec: Vec<String> = job
+            .get_merkle_path()
+            .inner_as_ref()
+            .iter()
+            .map(|hash| format!("\"{}\"", hex::encode(hash)))
+            .collect();
+        let merkle_path_json = format!("[{}]", merkle_path_vec.join(","));
+
+        // Reconstruct full coinbase tx bytes using the pre-built prefix/suffix
+        let mut coinbase_tx_bytes = Vec::new();
+        coinbase_tx_bytes.extend_from_slice(&job.get_coinbase_tx_prefix_with_bip141());
+        coinbase_tx_bytes.extend_from_slice(job.get_extranonce_prefix());
+        coinbase_tx_bytes.extend_from_slice(miner_extranonce);
+        coinbase_tx_bytes.extend_from_slice(&job.get_coinbase_tx_suffix_with_bip141());
+        let coinbase_tx_hex = hex::encode(&coinbase_tx_bytes);
+
+        let (redis_client, redis_stream_name, prev_block_hash_hex, bits_hex) = self.channel_manager_data.super_safe_lock(|data| {
+            let redis_client = data.redis_client.clone();
+            let redis_stream_name = data.redis_stream_name.clone();
+
+            let (prev_block_hash_hex, bits_hex) = data.last_new_prev_hash.as_ref()
+                .map(|prev_hash| {
+                    let mut prev_hash_bytes = prev_hash.prev_hash.inner_as_ref().to_vec();
+                    prev_hash_bytes.reverse();
+                    let prev_hash_hex = hex::encode(prev_hash_bytes);
+                    let bits = format!("{:x}", prev_hash.n_bits);
+                    (prev_hash_hex, bits)
+                })
+                .unwrap_or_else(|| (String::new(), String::new()));
+
+            (redis_client, redis_stream_name, prev_block_hash_hex, bits_hex)
+        });
+
+        if redis_client.is_none() {
+            info!("No Redis configured, skipping Redis publish for user {}", user_id);
+            return Ok(());
+        }
+
+        if let Some(mut client) = redis_client {
+            info!("Sending share to Redis stream for user {} (job {})", user_id, job_id);
+
+            let user_id_clone = user_id.clone();
+            let stream_name = redis_stream_name.clone();
+
+            tokio::spawn(async move {
+                use redis::AsyncCommands;
+
+                let fields: Vec<(&str, String)> = vec![
+                    ("share_hash", share_hash.unwrap_or_else(|| "".to_string())),
+                    ("coinbase_tx", coinbase_tx_hex),
+                    ("prev_block_hash", prev_block_hash_hex),
+                    ("bits", bits_hex),
+                    ("nonce", nonce.to_string()),
+                    ("ntime", ntime.to_string()),
+                    ("version", version.to_string()),
+                    ("merkle_path", merkle_path_json),
+                    ("user_id", user_id.clone()),
+                ];
+
+                match client.xadd::<_, _, _, _, String>(&stream_name, "*", &fields).await {
+                    Ok(id) => {
+                        info!("Share sent to Redis stream {} for user {} (job {}, stream_id: {})",
+                              stream_name, user_id_clone, job_id, id);
+                    }
+                    Err(e) => {
+                        warn!("Failed to send share to Redis stream for user {}: {}",
+                              user_id_clone, e);
+                    }
+                }
+            });
+        }
+
+        Ok(())
     }
 
     /// Sends share data to Redis Stream.
