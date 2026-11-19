@@ -10,6 +10,7 @@ use std::{
 
 use async_channel::{Receiver, Sender};
 use core::sync::atomic::Ordering;
+use redis::streams::StreamMaxlen;
 use stratum_apps::{
     coinbase_output_constraints::coinbase_output_constraints_message,
     config_helpers::CoinbaseRewardScript,
@@ -160,7 +161,7 @@ impl ChannelManagerData {
                     handle,
                     default_coinbase_script.clone(),
                     default_user_id.clone(), // Use user_id as the tag
-                    None, // No share limit for default house address
+                    None,                    // No share limit for default house address
                 );
             }
         }
@@ -575,19 +576,20 @@ impl ChannelManager {
     ) -> PoolResult<(), error::ChannelManager> {
         self.channel_manager_data.super_safe_lock(|cm_data| {
             // Collect all channel IDs for this downstream before removing it
-            let channel_ids: Vec<ChannelId> = if let Some(downstream) = cm_data.downstream.get(&downstream_id) {
-                downstream
-                    .downstream_data
-                    .safe_lock(|dd| {
-                        let mut ids = Vec::new();
-                        ids.extend(dd.standard_channels.keys().copied());
-                        ids.extend(dd.extended_channels.keys().copied());
-                        ids
-                    })
-                    .unwrap_or_else(|_| Vec::new())
-            } else {
-                Vec::new()
-            };
+            let channel_ids: Vec<ChannelId> =
+                if let Some(downstream) = cm_data.downstream.get(&downstream_id) {
+                    downstream
+                        .downstream_data
+                        .safe_lock(|dd| {
+                            let mut ids = Vec::new();
+                            ids.extend(dd.standard_channels.keys().copied());
+                            ids.extend(dd.extended_channels.keys().copied());
+                            ids
+                        })
+                        .unwrap_or_else(|_| Vec::new())
+                } else {
+                    Vec::new()
+                };
 
             // Unregister each channel from the assignment pool
             for channel_id in channel_ids {
@@ -841,10 +843,13 @@ impl ChannelManager {
         let handle = self
             .channel_manager_data
             .super_safe_lock(|data| {
-                data.get_next_available_channel()
-                    .ok_or_else(|| PoolError::<error::ChannelManager>::shutdown(PoolErrorKind::NoAvailableChannels))
+                data.get_next_available_channel().ok_or_else(|| {
+                    PoolError::<error::ChannelManager>::shutdown(PoolErrorKind::NoAvailableChannels)
+                })
             })
-            .map_err(|_| PoolError::<error::ChannelManager>::shutdown(PoolErrorKind::NoAvailableChannels))?;
+            .map_err(|_| {
+                PoolError::<error::ChannelManager>::shutdown(PoolErrorKind::NoAvailableChannels)
+            })?;
 
         // Store assignment
         self.channel_manager_data.super_safe_lock(|data| {
@@ -996,22 +1001,18 @@ impl ChannelManager {
 
                 // Update the standard channel's miner tag if it exists
                 if let Some(channel) = dd.standard_channels.get_mut(&handle.channel_id) {
-                    channel
-                        .set_miner_tag(miner_tag.clone())
-                        .map_err(|e| {
-                            error!("Failed to set standard channel miner tag: {:?}", e);
-                            PoolError::shutdown(PoolErrorKind::CouldNotInitiateSystem)
-                        })?;
+                    channel.set_miner_tag(miner_tag.clone()).map_err(|e| {
+                        error!("Failed to set standard channel miner tag: {:?}", e);
+                        PoolError::shutdown(PoolErrorKind::CouldNotInitiateSystem)
+                    })?;
                 }
 
                 // Update the extended channel's miner tag if it exists
                 if let Some(channel) = dd.extended_channels.get_mut(&handle.channel_id) {
-                    channel
-                        .set_miner_tag(miner_tag)
-                        .map_err(|e| {
-                            error!("Failed to set extended channel miner tag: {:?}", e);
-                            PoolError::shutdown(PoolErrorKind::CouldNotInitiateSystem)
-                        })?;
+                    channel.set_miner_tag(miner_tag).map_err(|e| {
+                        error!("Failed to set extended channel miner tag: {:?}", e);
+                        PoolError::shutdown(PoolErrorKind::CouldNotInitiateSystem)
+                    })?;
                 }
 
                 Ok(())
@@ -1053,30 +1054,44 @@ impl ChannelManager {
         coinbase_tx_bytes.extend_from_slice(&job.get_coinbase_tx_suffix_with_bip141());
         let coinbase_tx_hex = hex::encode(&coinbase_tx_bytes);
 
-        let (redis_client, redis_stream_name, prev_block_hash_hex, bits_hex) = self.channel_manager_data.super_safe_lock(|data| {
-            let redis_client = data.redis_client.clone();
-            let redis_stream_name = data.redis_stream_name.clone();
+        let (redis_client, redis_stream_name, prev_block_hash_hex, bits_hex) =
+            self.channel_manager_data.super_safe_lock(|data| {
+                let redis_client = data.redis_client.clone();
+                let redis_stream_name = data.redis_stream_name.clone();
 
-            let (prev_block_hash_hex, bits_hex) = data.last_new_prev_hash.as_ref()
-                .map(|prev_hash| {
-                    let mut prev_hash_bytes = prev_hash.prev_hash.inner_as_ref().to_vec();
-                    prev_hash_bytes.reverse();
-                    let prev_hash_hex = hex::encode(prev_hash_bytes);
-                    let bits = format!("{:x}", prev_hash.n_bits);
-                    (prev_hash_hex, bits)
-                })
-                .unwrap_or_else(|| (String::new(), String::new()));
+                let (prev_block_hash_hex, bits_hex) = data
+                    .last_new_prev_hash
+                    .as_ref()
+                    .map(|prev_hash| {
+                        let mut prev_hash_bytes = prev_hash.prev_hash.inner_as_ref().to_vec();
+                        prev_hash_bytes.reverse();
+                        let prev_hash_hex = hex::encode(prev_hash_bytes);
+                        let bits = format!("{:x}", prev_hash.n_bits);
+                        (prev_hash_hex, bits)
+                    })
+                    .unwrap_or_else(|| (String::new(), String::new()));
 
-            (redis_client, redis_stream_name, prev_block_hash_hex, bits_hex)
-        });
+                (
+                    redis_client,
+                    redis_stream_name,
+                    prev_block_hash_hex,
+                    bits_hex,
+                )
+            });
 
         if redis_client.is_none() {
-            info!("No Redis configured, skipping Redis publish for user {}", user_id);
+            info!(
+                "No Redis configured, skipping Redis publish for user {}",
+                user_id
+            );
             return Ok(());
         }
 
         if let Some(mut client) = redis_client {
-            info!("Sending share to Redis stream for user {} (job {})", user_id, job_id);
+            info!(
+                "Sending share to Redis stream for user {} (job {})",
+                user_id, job_id
+            );
 
             let user_id_clone = user_id.clone();
             let stream_name = redis_stream_name.clone();
@@ -1096,14 +1111,26 @@ impl ChannelManager {
                     ("user_id", user_id.clone()),
                 ];
 
-                match client.xadd::<_, _, _, _, String>(&stream_name, "*", &fields).await {
+                match client
+                    .xadd_maxlen::<_, _, _, _, String>(
+                        &stream_name,
+                        StreamMaxlen::Approx(10000),
+                        "*",
+                        &fields,
+                    )
+                    .await
+                {
                     Ok(id) => {
-                        info!("Share sent to Redis stream {} for user {} (job {}, stream_id: {})",
-                              stream_name, user_id_clone, job_id, id);
+                        info!(
+                            "Share sent to Redis stream {} for user {} (job {}, stream_id: {})",
+                            stream_name, user_id_clone, job_id, id
+                        );
                     }
                     Err(e) => {
-                        warn!("Failed to send share to Redis stream for user {}: {}",
-                              user_id_clone, e);
+                        warn!(
+                            "Failed to send share to Redis stream for user {}: {}",
+                            user_id_clone, e
+                        );
                     }
                 }
             });
@@ -1150,9 +1177,9 @@ impl ChannelManager {
         // Construct full coinbase transaction for hash verification
         // This allows clients to independently verify the hash
         use stratum_apps::stratum_core::bitcoin::{
-            consensus::Encodable,
-            transaction::{Transaction as BitcoinTransaction, TxIn, OutPoint, Sequence, Version},
             blockdata::locktime::absolute::LockTime,
+            consensus::Encodable,
+            transaction::{OutPoint, Sequence, Transaction as BitcoinTransaction, TxIn, Version},
             ScriptBuf, Witness,
         };
 
@@ -1166,7 +1193,8 @@ impl ChannelManager {
 
         // Get pool signature and miner tag for scriptSig construction
         let (pool_signature, miner_tag) = self.channel_manager_data.super_safe_lock(|data| {
-            let miner_tag = data.user_to_channel
+            let miner_tag = data
+                .user_to_channel
                 .get(&user_id)
                 .and_then(|handle| data.channel_to_user.get(handle))
                 .map(|mapping| mapping.coinbase_prefix_tag.clone())
@@ -1223,35 +1251,48 @@ impl ChannelManager {
         }
         let coinbase_tx_hex = hex::encode(&coinbase_tx_bytes);
 
-        let (redis_client, redis_stream_name, prev_block_hash_hex, bits_hex) = self.channel_manager_data.super_safe_lock(|data| {
-            let redis_client = data.redis_client.clone();
-            let redis_stream_name = data.redis_stream_name.clone();
+        let (redis_client, redis_stream_name, prev_block_hash_hex, bits_hex) =
+            self.channel_manager_data.super_safe_lock(|data| {
+                let redis_client = data.redis_client.clone();
+                let redis_stream_name = data.redis_stream_name.clone();
 
-            // Get block data from last new prev hash
-            let (prev_block_hash_hex, bits_hex) = data.last_new_prev_hash.as_ref()
-                .map(|prev_hash| {
-                    // Reverse bytes to display format (big-endian) for block explorer compatibility
-                    // Bitcoin block hashes are displayed in reverse byte order from their internal format
-                    let mut prev_hash_bytes = prev_hash.prev_hash.inner_as_ref().to_vec();
-                    prev_hash_bytes.reverse();
-                    let prev_hash_hex = hex::encode(prev_hash_bytes);
-                    // Format bits without 0x prefix for consistency with other hex fields
-                    let bits = format!("{:x}", prev_hash.n_bits);
-                    (prev_hash_hex, bits)
-                })
-                .unwrap_or_else(|| (String::new(), String::new()));
+                // Get block data from last new prev hash
+                let (prev_block_hash_hex, bits_hex) = data
+                    .last_new_prev_hash
+                    .as_ref()
+                    .map(|prev_hash| {
+                        // Reverse bytes to display format (big-endian) for block explorer compatibility
+                        // Bitcoin block hashes are displayed in reverse byte order from their internal format
+                        let mut prev_hash_bytes = prev_hash.prev_hash.inner_as_ref().to_vec();
+                        prev_hash_bytes.reverse();
+                        let prev_hash_hex = hex::encode(prev_hash_bytes);
+                        // Format bits without 0x prefix for consistency with other hex fields
+                        let bits = format!("{:x}", prev_hash.n_bits);
+                        (prev_hash_hex, bits)
+                    })
+                    .unwrap_or_else(|| (String::new(), String::new()));
 
-            (redis_client, redis_stream_name, prev_block_hash_hex, bits_hex)
-        });
+                (
+                    redis_client,
+                    redis_stream_name,
+                    prev_block_hash_hex,
+                    bits_hex,
+                )
+            });
 
         if redis_client.is_none() {
-            info!("No Redis configured, skipping Redis publish for user {}", user_id);
+            info!(
+                "No Redis configured, skipping Redis publish for user {}",
+                user_id
+            );
             return Ok(());
         }
 
         if let Some(mut client) = redis_client {
-            info!("Sending share to Redis stream for user {} (job {})",
-                  user_id, job_id);
+            info!(
+                "Sending share to Redis stream for user {} (job {})",
+                user_id, job_id
+            );
 
             let user_id_clone = user_id.clone();
             let stream_name = redis_stream_name.clone();
@@ -1273,19 +1314,30 @@ impl ChannelManager {
                     ("ntime", ntime.to_string()),
                     ("version", version.to_string()),
                     ("merkle_path", merkle_path_json),
-
                     // Metadata
                     ("user_id", user_id.clone()),
                 ];
 
-                match client.xadd::<_, _, _, _, String>(&stream_name, "*", &fields).await {
+                match client
+                    .xadd_maxlen::<_, _, _, _, String>(
+                        &stream_name,
+                        StreamMaxLen::Approx(10000),
+                        "*",
+                        &fields,
+                    )
+                    .await
+                {
                     Ok(id) => {
-                        info!("Share sent to Redis stream {} for user {} (job {}, stream_id: {})",
-                              stream_name, user_id_clone, job_id, id);
+                        info!(
+                            "Share sent to Redis stream {} for user {} (job {}, stream_id: {})",
+                            stream_name, user_id_clone, job_id, id
+                        );
                     }
                     Err(e) => {
-                        warn!("Failed to send share to Redis stream for user {}: {}",
-                              user_id_clone, e);
+                        warn!(
+                            "Failed to send share to Redis stream for user {}: {}",
+                            user_id_clone, e
+                        );
                     }
                 }
             });
